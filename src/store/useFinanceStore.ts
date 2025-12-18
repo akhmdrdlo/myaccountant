@@ -1,0 +1,157 @@
+import { create } from 'zustand';
+import type { Transaction } from '../types';
+
+interface FinanceStore {
+    transactions: Transaction[];
+    accounts: { name: string; initialBalance: number }[];
+    balance: number;
+    monthlyIncome: number;
+    monthlyExpense: number;
+    dailySafeLimit: number;
+    expenseCategories: string[];
+    incomeCategories: string[];
+    loading: boolean;
+    error: string | null;
+
+    setTransactions: (transactions: Transaction[]) => void;
+    setMetadata: (metadata: any) => void;
+    addTransactionOptimistic: (transaction: Transaction) => void;
+    removeTransactionOptimistic: (id: string) => void;
+    setLoading: (loading: boolean) => void;
+    setError: (error: string | null) => void;
+    getAccountBalances: () => { name: string; balance: number; color: string }[];
+}
+
+export const useFinanceStore = create<FinanceStore>((set) => ({
+    transactions: [],
+    accounts: [], // Initialize new property
+    balance: 0,
+    loading: false,
+    error: null,
+
+    monthlyIncome: 0,
+    monthlyExpense: 0,
+    dailySafeLimit: 0,
+    expenseCategories: [], // Initialize new property
+    incomeCategories: [], // Initialize new property
+
+    setTransactions: (transactions) => {
+        set((state) => {
+            // Calculate totals
+            const totalIncome = transactions.reduce((acc, curr) => curr.type === 'income' ? acc + curr.amount : acc, 0);
+            const totalExpense = transactions.reduce((acc, curr) => curr.type === 'expense' ? acc + curr.amount : acc, 0);
+
+            // Initial Balance (Sum of all accounts' initial balances)
+            const totalInitial = state.accounts.reduce((acc, curr) => acc + (curr.initialBalance || 0), 0);
+
+            const balance = totalInitial + totalIncome - totalExpense;
+
+            // Analytics (Current Month)
+            const now = new Date();
+            const monthlyTx = transactions.filter(t => {
+                const d = new Date(t.timestamp);
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+
+            const monthlyIncome = monthlyTx.reduce((acc, curr) => curr.type === 'income' ? acc + curr.amount : acc, 0);
+            const monthlyExpense = monthlyTx.reduce((acc, curr) => curr.type === 'expense' ? acc + curr.amount : acc, 0);
+
+            // Daily Safe Limit Logic
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const daysRemaining = Math.max(1, daysInMonth - now.getDate() + 1);
+            const dailySafeLimit = balance > 0 ? balance / daysRemaining : 0;
+
+            return { transactions, balance, monthlyIncome, monthlyExpense, dailySafeLimit };
+        });
+    },
+
+    setMetadata: (metadata) => {
+        set((state) => {
+            // Recalculate balance with new initial balances
+            const accounts = metadata.accounts || [];
+            const expenseCategories = metadata.expenseCategories || [];
+            const incomeCategories = metadata.incomeCategories || [];
+
+            const totalInitial = accounts.reduce((acc: number, curr: any) => acc + (curr.initialBalance || 0), 0);
+            const totalIncome = state.transactions.reduce((acc, curr) => curr.type === 'income' ? acc + curr.amount : acc, 0);
+            const totalExpense = state.transactions.reduce((acc, curr) => curr.type === 'expense' ? acc + curr.amount : acc, 0);
+
+            const balance = totalInitial + totalIncome - totalExpense;
+
+            // Recalculate Safe Limit
+            const now = new Date();
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const daysRemaining = Math.max(1, daysInMonth - now.getDate() + 1);
+            const dailySafeLimit = balance > 0 ? balance / daysRemaining : 0;
+
+            return {
+                accounts,
+                expenseCategories,
+                incomeCategories,
+                balance,
+                dailySafeLimit
+            };
+        });
+    },
+
+    addTransactionOptimistic: (transaction) => {
+        set((state) => {
+            const newTransactions = [transaction, ...state.transactions];
+            const newBalance = transaction.type === 'income'
+                ? state.balance + transaction.amount
+                : state.balance - transaction.amount;
+            return { transactions: newTransactions, balance: newBalance };
+        });
+    },
+
+    removeTransactionOptimistic: (id) => {
+        // Useful for rollback on error
+        set((state) => {
+            const txToRemove = state.transactions.find(t => t.id === id);
+            if (!txToRemove) return state;
+
+            const newTransactions = state.transactions.filter(t => t.id !== id);
+            const newBalance = txToRemove.type === 'income'
+                ? state.balance - txToRemove.amount
+                : state.balance + txToRemove.amount;
+
+            return { transactions: newTransactions, balance: newBalance };
+        });
+    },
+
+    setLoading: (loading) => set({ loading }),
+    setError: (error) => set({ error }),
+
+    getAccountBalances: () => {
+        const state = useFinanceStore.getState();
+        const accounts = state.accounts;
+        const transactions = state.transactions;
+
+        // Map internal account names to display colors
+        // Bank BTN (Blue/Yellow), BRI (Blue/Orange), Seabank (Orange), Cash (Purple)
+        const getColor = (name: string) => {
+            const low = name.toLowerCase();
+            if (low.includes('btn')) return "from-blue-600 to-yellow-500";
+            if (low.includes('bri')) return "from-blue-700 to-orange-500";
+            if (low.includes('seabank')) return "from-orange-500 to-red-500";
+            if (low.includes('cash')) return "from-purple-600 to-indigo-600";
+            return "from-gray-700 to-gray-900";
+        };
+
+        return accounts.map((acc: { name: string; initialBalance: number }) => {
+            const accIncome = transactions
+                .filter((t: Transaction) => t.account === acc.name && t.type === 'income')
+                .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+            const accExpense = transactions
+                .filter((t: Transaction) => t.account === acc.name && t.type === 'expense')
+                .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+            return {
+                name: acc.name,
+                balance: (acc.initialBalance || 0) + accIncome - accExpense,
+                color: getColor(acc.name)
+            };
+        });
+    }
+}));
