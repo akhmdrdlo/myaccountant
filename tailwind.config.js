@@ -12,7 +12,8 @@ export default {
           secondary: '#0077C8', // Lighter Blue
           accent: '#F97316', // Orange
           bg: '#F9FAFB', // Off-white
-        }
+        },
+        slate: '#1E293B', // Define slate base color for user's convenience
       }
     },
   },
