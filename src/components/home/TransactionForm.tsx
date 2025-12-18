@@ -132,7 +132,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                             <input
                                 type="number"
                                 value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
                                 placeholder="0"
                                 className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary font-bold text-2xl text-gray-800"
                                 required
@@ -192,7 +192,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         <input
                             type="text"
                             value={description}
-                            onChange={(e) => setDescription(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
                             placeholder="Makan siang..."
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary text-sm"
                         />

@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { BalanceCard } from './BalanceCard';
 
@@ -20,7 +19,7 @@ export const AccountCards = () => {
                 </div>
 
                 {/* Individual Account Cards */}
-                {accounts.map((acc) => (
+                {accounts.map((acc: { name: string; balance: number; color: string }) => (
                     <div key={acc.name} className="w-[85vw] max-w-sm snap-center">
                         <BalanceCard
                             name={acc.name}

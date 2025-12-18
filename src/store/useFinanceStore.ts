@@ -22,7 +22,7 @@ interface FinanceStore {
     getAccountBalances: () => { name: string; balance: number; color: string }[];
 }
 
-export const useFinanceStore = create<FinanceStore>((set) => ({
+export const useFinanceStore = create<FinanceStore>((set, get) => ({
     transactions: [],
     accounts: [], // Initialize new property
     balance: 0,
@@ -36,7 +36,7 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
     incomeCategories: [], // Initialize new property
 
     setTransactions: (transactions) => {
-        set((state) => {
+        set((state: FinanceStore) => {
             // Calculate totals
             const totalIncome = transactions.reduce((acc, curr) => curr.type === 'income' ? acc + curr.amount : acc, 0);
             const totalExpense = transactions.reduce((acc, curr) => curr.type === 'expense' ? acc + curr.amount : acc, 0);
@@ -65,8 +65,8 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
         });
     },
 
-    setMetadata: (metadata) => {
-        set((state) => {
+    setMetadata: (metadata: any) => {
+        set((state: FinanceStore) => {
             // Recalculate balance with new initial balances
             const accounts = metadata.accounts || [];
             const expenseCategories = metadata.expenseCategories || [];
@@ -95,7 +95,7 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
     },
 
     addTransactionOptimistic: (transaction) => {
-        set((state) => {
+        set((state: FinanceStore) => {
             const newTransactions = [transaction, ...state.transactions];
             const newBalance = transaction.type === 'income'
                 ? state.balance + transaction.amount
@@ -106,7 +106,7 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
 
     removeTransactionOptimistic: (id) => {
         // Useful for rollback on error
-        set((state) => {
+        set((state: FinanceStore) => {
             const txToRemove = state.transactions.find(t => t.id === id);
             if (!txToRemove) return state;
 
@@ -123,7 +123,7 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
     setError: (error) => set({ error }),
 
     getAccountBalances: () => {
-        const state = useFinanceStore.getState();
+        const state = get();
         const accounts = state.accounts;
         const transactions = state.transactions;
 

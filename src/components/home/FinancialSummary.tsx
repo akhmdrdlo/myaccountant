@@ -1,6 +1,5 @@
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { TrendingDown, TrendingUp, AlertCircle, Target } from 'lucide-react';
-import { cn } from '../../lib/utils';
 
 export const FinancialSummary = () => {
     const {

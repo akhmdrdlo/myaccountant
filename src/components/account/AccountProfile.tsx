@@ -1,5 +1,4 @@
-import { MapPin, Briefcase, GraduationCap, Code, Award, ExternalLink, Github, Linkedin, Mail } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { MapPin, GraduationCap, Award, Github, Linkedin, Mail } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
 
 export const AccountProfile = () => {
