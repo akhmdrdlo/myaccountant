@@ -1,4 +1,4 @@
-import { Home, FileText, User } from 'lucide-react';
+import { Home, FileText, User, PieChart } from 'lucide-react';
 import { cn } from '../../lib/utils';
 // import { useState } from 'react'; // Removed unused
 
@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 const NAV_ITEMS = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'mutasi', label: 'Mutasi', icon: FileText }, // History
-    // { id: 'qris', label: 'QRIS', icon: QrCode, highlight: true }, // Optional center button like BRImo
+    { id: 'analytics', label: 'Analisis', icon: PieChart },
     { id: 'akun', label: 'Akun', icon: User },
 ];
 

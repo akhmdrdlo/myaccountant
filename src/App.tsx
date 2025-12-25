@@ -6,18 +6,29 @@ import { QuickActions } from './components/home/QuickActions';
 import { TransactionList } from './components/home/TransactionList';
 import { TransactionForm } from './components/home/TransactionForm';
 import { FinancialSummary } from './components/home/FinancialSummary';
+import { GoalCard } from './components/home/GoalCard';
+import { BudgetList } from './components/home/BudgetList';
+import { AnalyticsView } from './components/home/AnalyticsView';
 import { AccountProfile } from './components/account/AccountProfile';
 import { PinLock } from './components/auth/PinLock';
+import { GoalForm } from './components/home/GoalForm';
+import { BudgetSettings } from './components/home/BudgetSettings'; // New
 import { useGoogleSheets } from './hooks/useGoogleSheets';
+import { SubscriptionTracker } from './components/home/SubscriptionTracker';
 import { useFinanceStore } from './store/useFinanceStore';
-import type { TransactionInput } from './types';
+import type { TransactionInput, Goal, Budget } from './types';
 
 function App() {
-  const { fetchTransactions, addTransaction } = useGoogleSheets();
+  const { fetchTransactions, addTransaction, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useGoogleSheets();
   const {
     transactions,
     setTransactions,
     setMetadata,
+    goals,
+    setGoals,
+    budgets,
+    setBudgets,
+    setSubscriptions,
     addTransactionOptimistic,
     removeTransactionOptimistic,
     setLoading,
@@ -27,6 +38,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<Partial<TransactionInput> | undefined>(undefined);
+
+  // New Modals State
+  const [isGoalFormOpen, setIsGoalFormOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | undefined>(undefined);
+  const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -40,14 +56,16 @@ function App() {
         setTransactions(result); // Fallback for mock or old API
       } else {
         setTransactions(result.transactions);
-        if (result.metadata) {
-          setMetadata(result.metadata);
-        }
+        // ... (rest of logic handles metadata, goals, budgets)
+        if (result.metadata) setMetadata(result.metadata);
+        if (result.goals) setGoals(result.goals);
+        if (result.budgets) setBudgets(result.budgets);
+        if (result.subscriptions) setSubscriptions(result.subscriptions);
       }
       setLoading(false);
     };
     loadData();
-  }, [fetchTransactions, setTransactions, setMetadata, setLoading]);
+  }, [fetchTransactions, setTransactions, setMetadata, setGoals, setBudgets, setLoading]);
 
   const handleOpenForm = (initial?: Partial<TransactionInput>) => {
     setFormInitialData(initial);
@@ -55,7 +73,53 @@ function App() {
   };
 
   const handleAddTransaction = async (input: TransactionInput) => {
-    // 1. Create temp ID and Optimistic Update
+    // 1. Dual Entry for Transfer
+    if (input.type === 'transfer') {
+      const sourceTx: TransactionInput = {
+        type: 'expense',
+        category: 'Transfer / Tarik Tunai',
+        amount: input.amount,
+        description: `Transfer ke ${input.toAccount} (${input.description})`,
+        account: input.account,
+      };
+
+      const destTx: TransactionInput = {
+        type: 'income',
+        category: 'Transfer / Tarik Tunai',
+        amount: input.amount,
+        description: `Transfer dari ${input.account} (${input.description})`,
+        account: input.toAccount || 'Cash', // Fallback if missing
+      };
+
+      // Optimistic Update for both
+      const tempId1 = crypto.randomUUID();
+      const tempId2 = crypto.randomUUID();
+
+      const t1 = { ...sourceTx, id: tempId1, timestamp: new Date().toISOString(), status: 'pending' as const };
+      const t2 = { ...destTx, id: tempId2, timestamp: new Date().toISOString(), status: 'pending' as const };
+
+      addTransactionOptimistic(t1);
+      // Wait roughly before adding second to avoid identical timestamp collision if sorting relies on it strictly
+      addTransactionOptimistic(t2);
+
+      try {
+        await addTransaction(sourceTx);
+        await addTransaction(destTx);
+
+        const result = await fetchTransactions();
+        if (Array.isArray(result)) setTransactions(result);
+        else setTransactions(result.transactions);
+        return true;
+      } catch (err) {
+        console.error("Transfer failed", err);
+        removeTransactionOptimistic(tempId1);
+        removeTransactionOptimistic(tempId2);
+        alert("Gagal melakukan transfer.");
+        return false;
+      }
+    }
+
+    // Normal Transaction Logic
     const tempId = crypto.randomUUID();
     const tempTransaction = {
       ...input,
@@ -72,14 +136,14 @@ function App() {
       if (!success) {
         throw new Error("Failed to save");
       }
-      fetchTransactions().then(startResult => {
-        if (Array.isArray(startResult)) {
-          setTransactions(startResult);
-        } else {
-          setTransactions(startResult.transactions);
-          if (startResult.metadata) setMetadata(startResult.metadata);
-        }
-      });
+      // Re-fetch to get consistent state
+      const result = await fetchTransactions();
+      if (Array.isArray(result)) {
+        setTransactions(result);
+      } else {
+        setTransactions(result.transactions);
+        if (result.metadata) setMetadata(result.metadata);
+      }
       return true;
     } catch (err) {
       console.error("Failed to add transaction", err);
@@ -110,9 +174,47 @@ function App() {
     }
   };
 
+  // Goal Handlers
+  const handleOpenGoalForm = (goal?: Goal) => {
+    setEditingGoal(goal);
+    setIsGoalFormOpen(true);
+  };
+
+  const handleSaveGoal = async (goal: Goal) => {
+    // Optimistic Update
+    if (editingGoal) {
+      setGoals(goals.map(g => g.id === goal.id ? goal : g));
+      await updateGoal(goal);
+    } else {
+      setGoals([...goals, goal]);
+      await addGoal(goal);
+    }
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    // Optimistic Update
+    setGoals(goals.filter(g => g.id !== id));
+    await deleteGoal(id);
+  };
+
+  const handleSaveBudgets = async (newBudgets: Budget[]) => {
+    setBudgets(newBudgets);
+    await saveBudgetsApi(newBudgets);
+  };
+
+  // Extract categories for Budget Settings (from existing transactions or predefined)
+  const availableCategories = Array.from(new Set(transactions.map(t => t.category)));
+  // Ensure default categories exist if no transactions
+  const defaultCategories = ['Makan Weekday', 'Makan Weekend', 'Transport', 'Jajan/Hobi', 'Utilitas', 'Kos (Tabungan)'];
+  const allCategories = Array.from(new Set([...defaultCategories, ...availableCategories]));
+
+
   if (!isAuthenticated) {
     return <PinLock onSuccess={() => setIsAuthenticated(true)} />;
   }
+
+  // Get Safety Buffer from Budgets (Special Category)
+  const safetyBuffer = budgets.find(b => b.category === 'Dana Darurat (Safety Buffer)')?.limit || 0;
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
@@ -120,13 +222,42 @@ function App() {
       {/* Home Tab */}
       {activeTab === 'home' && (
         <>
-          <AccountCards />
+          <AccountCards onOpenTransactionForm={handleOpenForm} />
+
 
           <QuickActions
             onActionClick={handleQuickAction}
+            transactions={transactions} // Pass for sorting
           />
 
-          <FinancialSummary />
+          <div className="px-1 mb-6">
+            <FinancialSummary />
+          </div>
+
+          <div className="px-1">
+            <SubscriptionTracker />
+
+            <div className="flex justify-between items-center mb-2 px-1">
+              <h3 className="font-semibold text-gray-700">Barang Harapan</h3>
+              <button onClick={() => handleOpenGoalForm()} className="text-xs text-brimo-secondary font-medium hover:underline">Tambah</button>
+            </div>
+
+            {goals.map(goal => (
+              <GoalCard
+                key={goal.id}
+                title={goal.name}
+                currentAmount={goal.currentAmount}
+                targetAmount={goal.targetAmount}
+                deadline={goal.deadline}
+                color={goal.color}
+                safetyBuffer={safetyBuffer} // Pass the buffer
+                onEdit={() => handleOpenGoalForm(goal)}
+              />
+            ))}
+            {goals.length === 0 && (
+              <p className="text-xs text-gray-400 text-center mb-4 italic">Belum ada barang harapan. Tambahkan sekarang!</p>
+            )}
+          </div>
 
           {/* Recent Transcations Preview (Optional, or just header) */}
           <div className="flex justify-between items-center mb-2 px-1">
@@ -141,6 +272,21 @@ function App() {
         <div className="mt-4">
           <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">Mutasi Rekening</h2>
           <TransactionList transactions={transactions} loading={storeLoading} />
+        </div>
+      )}
+
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <div className="mt-4">
+          <AnalyticsView transactions={transactions}>
+            <div className="mt-6">
+              <BudgetList
+                transactions={transactions}
+                budgets={budgets}
+                onOpenSettings={() => setIsBudgetSettingsOpen(true)}
+              />
+            </div>
+          </AnalyticsView>
         </div>
       )}
 
@@ -164,6 +310,24 @@ function App() {
         onSubmit={handleAddTransaction}
         loading={storeLoading}
       />
+
+      <GoalForm
+        isOpen={isGoalFormOpen}
+        onClose={() => setIsGoalFormOpen(false)}
+        initialData={editingGoal}
+        onSubmit={handleSaveGoal}
+        onDelete={handleDeleteGoal}
+        defaultAmount="=summary!E4"
+      />
+
+      <BudgetSettings
+        isOpen={isBudgetSettingsOpen}
+        onClose={() => setIsBudgetSettingsOpen(false)}
+        budgets={budgets}
+        categories={allCategories}
+        onSave={handleSaveBudgets}
+      />
+
     </Layout>
   );
 }

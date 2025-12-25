@@ -1,9 +1,17 @@
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { BalanceCard } from './BalanceCard';
+import type { TransactionInput } from '../../types';
 
-export const AccountCards = () => {
+interface AccountCardsProps {
+    onOpenTransactionForm: (initial?: Partial<TransactionInput>) => void;
+}
+
+export const AccountCards = ({ onOpenTransactionForm }: AccountCardsProps) => {
     const { balance, loading, getAccountBalances } = useFinanceStore();
     const accounts = getAccountBalances();
+
+    const cashBalance = accounts.find((a: any) => a.name.toLowerCase().includes('cash'))?.balance || 0;
+    const bankBalance = balance - cashBalance;
 
     return (
         <div className="w-full overflow-x-auto pb-4 pt-2 px-1 snap-x snap-mandatory scrollbar-hide">
@@ -15,6 +23,12 @@ export const AccountCards = () => {
                         balance={balance}
                         loading={loading}
                         color="from-brimo-primary to-brimo-secondary"
+                        breakdown={{
+                            cash: cashBalance,
+                            bank: bankBalance
+                        }}
+                        onTransfer={() => onOpenTransactionForm({ type: 'transfer' })}
+                        onWithdraw={() => onOpenTransactionForm({ type: 'transfer', toAccount: 'Cash', description: 'Tarik Tunai' })}
                     />
                 </div>
 

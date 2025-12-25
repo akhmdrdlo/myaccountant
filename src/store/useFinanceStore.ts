@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction } from '../types';
+import type { Transaction, Goal, Budget, Subscription } from '../types';
 
 interface FinanceStore {
     transactions: Transaction[];
@@ -10,6 +10,9 @@ interface FinanceStore {
     dailySafeLimit: number;
     expenseCategories: string[];
     incomeCategories: string[];
+    goals: Goal[];
+    budgets: Budget[];
+    subscriptions: Subscription[];
     loading: boolean;
     error: string | null;
 
@@ -20,11 +23,14 @@ interface FinanceStore {
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
     getAccountBalances: () => { name: string; balance: number; color: string }[];
+    setGoals: (goals: Goal[]) => void;
+    setBudgets: (budgets: Budget[]) => void;
+    setSubscriptions: (subscriptions: Subscription[]) => void;
 }
 
 export const useFinanceStore = create<FinanceStore>((set, get) => ({
     transactions: [],
-    accounts: [], // Initialize new property
+    accounts: [],
     balance: 0,
     loading: false,
     error: null,
@@ -32,8 +38,11 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
     monthlyIncome: 0,
     monthlyExpense: 0,
     dailySafeLimit: 0,
-    expenseCategories: [], // Initialize new property
-    incomeCategories: [], // Initialize new property
+    expenseCategories: [],
+    incomeCategories: [],
+    goals: [],
+    budgets: [],
+    subscriptions: [],
 
     setTransactions: (transactions) => {
         set((state: FinanceStore) => {
@@ -119,8 +128,8 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
         });
     },
 
-    setLoading: (loading) => set({ loading }),
-    setError: (error) => set({ error }),
+    setLoading: (loading: boolean) => set({ loading }),
+    setError: (error: string | null) => set({ error }),
 
     getAccountBalances: () => {
         const state = get();
@@ -153,5 +162,9 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
                 color: getColor(acc.name)
             };
         });
-    }
+    },
+
+    setGoals: (goals) => set({ goals }),
+    setBudgets: (budgets) => set({ budgets }),
+    setSubscriptions: (subscriptions) => set({ subscriptions }),
 }));

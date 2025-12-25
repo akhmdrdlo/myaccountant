@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# 💰 myAccountant
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, privacy-focused Personal Finance Tracker that gives you full control over your data.
 
-Currently, two official plugins are available:
+**myAccountant** allows you to track expenses, income, subscriptions, and financial goals using **Google Sheets as your private backend database.** No 3rd party servers, no hidden fees—just you and your spreadsheet.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Key Features
 
-## React Compiler
+### 📊 Dashboard & Tracking
+- **Smart Overview**: See your Total Balance, Cash in Hand, and Bank Savings at a glance.
+- **Transaction Tracking**: Easily record Income, Expenses, and Transfers between accounts.
+- **Quick Actions**: One-tap shortcuts for frequent expenses like "Makan Siang", "Transport", or "Jajan".
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 💳 Subscription Management
+- **Recurring Bills**: Never miss a payment again. Track **Netflix, Spotify, Internet**, and other recurring bills.
+- **Billing Calendar**: Visual indicators for when bills are due.
 
-## Expanding the ESLint configuration
+### 🎯 Goals & Budgeting
+- **Barang Harapan (Wishlist)**: Create savings goals for items you want to buy. Track progress with visual bars.
+- **Smart Budgeting**: Set monthly limits for categories (e.g., Makan, Transport).
+- **Safety Buffer**: Define a "Dana Darurat" to ensure you never overspend your safety net.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 📈 Analytics
+- **Visual Insights**: specific breakdowns of where your money goes.
+- **Monthly Reports**: Compare spending against your budget.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 🔒 Privacy First
+- **PIN Lock**: Simple security layer to keep your dashboard private.
+- **Your Data, Your Control**: All data is stored in **your own Google Sheet**. You have full access and ownership of your raw financial data.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🛠️ Technology Stack
+- **Frontend**: React + TypeScript + Vite
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **Integration**: Google Sheets API (v4)
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🚀 Getting Started
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+To run this project locally, you will need your own Google Cloud Console credentials.
+
+### Prerequisites
+1. Node.js (v18 or later)
+2. A Google Cloud Project with **Google Sheets API** enabled.
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/my-accountant.git
+   cd my-accountant
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**
+   Create a `.env` file in the root directory and add your Google Sheets credentials:
+   ```env
+   VITE_GOOGLE_SCRIPT_URL=your_api_key_here
+   ```
+   > **Note**: Never commit your `.env` file to public repositories!
+
+4. **Run the Application**
+   ```bash
+   npm run dev
+   ```
+
+## 📝 Usage Note
+This application requires a specific Google Sheet structure to function correctly. Ensure your spreadsheet has the required tabs (`Transactions`, `Metadata`, etc.) or let the app initialize them for you (functionality pending implementation).
+
+## Developer
+- **Name**: Akhmad Ridlo
+- **Email**: akhmadd432@gmail.com

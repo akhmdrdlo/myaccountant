@@ -1,0 +1,146 @@
+import { Target, AlertTriangle, TrendingUp, ShieldCheck } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { differenceInDays } from 'date-fns';
+
+interface GoalCardProps {
+    title: string;
+    currentAmount: number | string;
+    targetAmount: number;
+    color?: string;
+    deadline?: string;
+    onEdit?: () => void;
+    safetyBuffer?: number;
+}
+
+export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-500", deadline, onEdit, safetyBuffer = 0 }: GoalCardProps) => {
+    // Safely parse current amount (handle string/formula)
+    const safeCurrent = isNaN(Number(currentAmount)) ? 0 : Number(currentAmount);
+
+    // 1. Basic Progress
+    const percentage = Math.min(100, Math.max(0, (safeCurrent / targetAmount) * 100));
+
+    // 2. Expert Safety Analysis
+    // Logic: Real buying power = Total Saldo - Safety Buffer.
+    // If Real Buying Power < Target, it's risky.
+    const realBuyingPower = safeCurrent - safetyBuffer;
+    // Removed unused safePercentage
+    const isRisky = realBuyingPower < targetAmount;
+    const canAfford = safeCurrent >= targetAmount;
+
+    // 3. Forecasting (Nabung Harian)
+    let dailySaving = 0;
+    let daysLeft = 0;
+    let showForecast = false;
+
+    if (deadline && targetAmount > safeCurrent) {
+        try {
+            // Handle deadline string (YYYY-MM-DD or ISO)
+            const today = new Date();
+            // Ensure we parse the date correctly even if it's just YYYY-MM-DD
+            const targetDate = new Date(deadline);
+
+            if (!isNaN(targetDate.getTime())) {
+                daysLeft = differenceInDays(targetDate, today);
+                if (daysLeft > 0) {
+                    const remaining = targetAmount - safeCurrent;
+                    dailySaving = Math.ceil(remaining / daysLeft);
+                    showForecast = true;
+                }
+            }
+        } catch (e) {
+            // Invalid date
+        }
+    }
+
+    // Format currency
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(amount);
+    };
+
+    return (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50" : "bg-indigo-50")}>
+                        {isRisky && canAfford ? (
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                        ) : (
+                            <Target className="w-5 h-5 text-indigo-600" />
+                        )}
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-gray-800 text-sm">{title}</h4>
+                        {deadline && <p className="text-[10px] text-gray-400">Target: {deadline}</p>}
+                    </div>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                    <button onClick={onEdit} className="text-[10px] text-gray-400 hover:text-indigo-600 mb-1">
+                        Edit
+                    </button>
+                    <p className="text-xs font-bold text-indigo-600">{Math.round(percentage)}%</p>
+                </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-2 relative">
+                {/* Visualizing Safety Buffer impact if affordable but risky */}
+                <div
+                    className={cn("h-full rounded-full transition-all duration-1000 ease-out", color)}
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
+
+            <div className="flex justify-between items-center text-xs mb-3">
+                <span className="text-gray-500 font-medium">{formatCurrency(safeCurrent)}</span>
+                <span className="text-gray-400">dari {formatCurrency(targetAmount)}</span>
+            </div>
+
+            {/* Expert Insights */}
+            <div className="space-y-2">
+                {/* Safety Analysis */}
+                {canAfford && isRisky && (
+                    <div className="bg-red-50 p-2 rounded-lg flex gap-2 items-start">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-[10px] font-bold text-red-700">Bahaya! Dana Menipis</p>
+                            <p className="text-[10px] text-red-600 leading-tight">
+                                Jika dibeli, sisa saldo hanya {formatCurrency(safeCurrent - targetAmount)}.
+                                Di bawah safety buffer {formatCurrency(safetyBuffer)}.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {canAfford && !isRisky && (
+                    <div className="bg-green-50 p-2 rounded-lg flex gap-2 items-start">
+                        <ShieldCheck className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-[10px] font-bold text-green-700">Aman Dibeli!</p>
+                            <p className="text-[10px] text-green-600 leading-tight">
+                                Sisa saldo aman di atas buffer {formatCurrency(safetyBuffer)}.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Forecasting */}
+                {showForecast && (
+                    <div className="bg-blue-50 p-2 rounded-lg flex gap-2 items-start">
+                        <TrendingUp className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-[10px] font-bold text-blue-700">Tips Nabung</p>
+                            <p className="text-[10px] text-blue-600 leading-tight">
+                                Sisihkan <span className="font-bold">{formatCurrency(dailySaving)}/hari</span> selama {daysLeft} hari lagi.
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};

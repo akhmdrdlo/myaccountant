@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Check, Wallet } from 'lucide-react';
+import { X, Check, Wallet, ArrowRightLeft, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { TransactionInput } from '../../types';
 
@@ -12,7 +12,7 @@ interface TransactionFormProps {
 }
 
 const EXPENSE_CATEGORIES = [
-    'Makan Weekday', 'Makan Weekend', 'Transport', 'Utilitas', 'Kos (Tabungan)', 'Jajan/Hobi', 'Admin Bank', 'Transfer / Tarik Tunai'
+    'Makan Weekday', 'Makan Weekend', 'Transport', 'Utilitas', 'Kos (Tabungan)', 'Jajan/Hobi', 'Admin Bank'
 ];
 
 const INCOME_CATEGORIES = [
@@ -23,12 +23,37 @@ const ACCOUNTS = [
     'Bank BTN (Gaji)', 'Bank BRI (Freelance + Endapan)', 'Seabank (Simpanan)', 'Cash'
 ];
 
+// Smart Category Mapping
+const KEYWORD_MAP: Record<string, string> = {
+    'makan': 'Makan Weekday',
+    'nasi': 'Makan Weekday',
+    'warteg': 'Makan Weekday',
+    'kfc': 'Makan Weekend',
+    'mcd': 'Makan Weekend',
+    'bakso': 'Makan Weekday',
+    'soto': 'Makan Weekday',
+    'gojek': 'Transport',
+    'grab': 'Transport',
+    'bensin': 'Transport',
+    'parkir': 'Transport',
+    'tol': 'Transport',
+    'listrik': 'Utilitas',
+    'air': 'Utilitas',
+    'wifi': 'Utilitas',
+    'pulsa': 'Utilitas',
+    'kopi': 'Jajan/Hobi',
+    'snack': 'Jajan/Hobi',
+    'admin': 'Admin Bank',
+    'transfer': 'Admin Bank', // Potentially admin fee
+};
+
 export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading }: TransactionFormProps) => {
-    const [type, setType] = useState<'income' | 'expense'>('expense');
+    const [type, setType] = useState<'income' | 'expense' | 'transfer' | 'adjustment'>('expense');
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [account, setAccount] = useState('Cash');
+    const [toAccount, setToAccount] = useState('Bank BTN (Gaji)'); // For Transfer
 
     // Reset/Prefill form when opened
     useEffect(() => {
@@ -39,33 +64,56 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                 setAmount(initialData.amount ? initialData.amount.toString() : '');
                 setDescription(initialData.description || '');
                 setAccount(initialData.account || 'Cash');
+                if (initialData.toAccount) setToAccount(initialData.toAccount);
             } else {
                 // Default reset
+                setAccount('Cash');
+                setType('expense');
                 setAmount('');
                 setCategory('');
                 setDescription('');
-                setAccount('Cash');
-                setType('expense');
             }
         }
     }, [isOpen, initialData]);
 
+    // Smart Category Logic
+    useEffect(() => {
+        if (!isOpen || type !== 'expense' || category !== '') return; // Only verify if category is empty or user hasn't manually set it? 
+        // Better: Only auto-set if the user is typing and found a match, but let's just do simple match
+
+        const lowerDesc = description.toLowerCase();
+        for (const [key, cat] of Object.entries(KEYWORD_MAP)) {
+            if (lowerDesc.includes(key)) {
+                setCategory(cat);
+                break;
+            }
+        }
+    }, [description, type, isOpen, category]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!amount || !category) return;
+        if (!amount) return;
+        if (type !== 'transfer' && type !== 'adjustment' && !category) return; // Category required for income/expense
 
         const numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
+
+        // For Transfer/Adjustment, we might default the category or handle it specially
+        let finalCategory = category;
+        if (type === 'transfer') finalCategory = 'Transfer';
+        if (type === 'adjustment') finalCategory = 'Adjustment';
 
         const success = await onSubmit({
             type,
             amount: numAmount,
-            category,
-            description,
-            account
+            category: finalCategory,
+            description: description || (type === 'transfer' ? `Transfer to ${toAccount}` : 'Adjustment'),
+            account,
+            toAccount: type === 'transfer' ? toAccount : undefined
         });
 
         if (success) {
             onClose();
+            // Reset fields
             setAmount('');
             setDescription('');
             setCategory('');
@@ -100,28 +148,27 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5 pb-10">
-                    {/* Type Switcher */}
-                    <div className="flex p-1 bg-gray-100 rounded-xl">
-                        <button
-                            type="button"
-                            onClick={() => setType('expense')}
-                            className={cn(
-                                "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all",
-                                type === 'expense' ? "bg-white text-red-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                            )}
-                        >
-                            Pengeluaran
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setType('income')}
-                            className={cn(
-                                "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all",
-                                type === 'income' ? "bg-white text-green-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                            )}
-                        >
-                            Pemasukan
-                        </button>
+                    {/* Type Navigation */}
+                    <div className="flex p-1 bg-gray-100 rounded-xl overflow-x-auto scrollbar-hide">
+                        {[
+                            { id: 'expense', label: 'Pengeluaran', color: 'text-red-500' },
+                            { id: 'income', label: 'Pemasukan', color: 'text-green-500' },
+                            { id: 'transfer', label: 'Transfer', color: 'text-blue-500', icon: ArrowRightLeft },
+                            { id: 'adjustment', label: 'Atur Saldo', color: 'text-purple-500', icon: Settings }
+                        ].map((t) => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => setType(t.id as any)}
+                                className={cn(
+                                    "flex-1 min-w-[90px] py-2.5 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                    type === t.id ? `bg-white ${t.color} shadow-sm` : "text-gray-500 hover:text-gray-700"
+                                )}
+                            >
+                                {t.icon && <t.icon className="w-3.5 h-3.5" />}
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Amount Input */}
@@ -141,9 +188,11 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         </div>
                     </div>
 
-                    {/* Account Selector */}
+                    {/* Source Account Selector */}
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-2">Sumber Dana / Akun</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-2">
+                            {type === 'income' ? 'Masuk ke Akun' : 'Sumber Dana'}
+                        </label>
                         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                             {ACCOUNTS.map(acc => (
                                 <button
@@ -164,27 +213,56 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         </div>
                     </div>
 
-                    {/* Category Grid */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-2">Kategori</label>
-                        <div className="flex flex-wrap gap-2">
-                            {(type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
-                                <button
-                                    key={cat}
-                                    type="button"
-                                    onClick={() => setCategory(cat)}
-                                    className={cn(
-                                        "px-3 py-1.5 text-xs rounded-full border transition-all",
-                                        category === cat
-                                            ? "bg-blue-50 border-brimo-primary text-brimo-primary font-medium"
-                                            : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
-                                    )}
-                                >
-                                    {cat}
-                                </button>
-                            ))}
+                    {/* Destination Account Selector (Transfer Only) */}
+                    {type === 'transfer' && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-2">
+                                Tujuan Transfer
+                            </label>
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                {ACCOUNTS.filter(a => a !== account).map(acc => (
+                                    <button
+                                        key={acc}
+                                        type="button"
+                                        onClick={() => setToAccount(acc)}
+                                        className={cn(
+                                            "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
+                                            toAccount === acc
+                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm"
+                                                : "bg-white border-gray-200 text-gray-600"
+                                        )}
+                                    >
+                                        <Wallet className="w-3.5 h-3.5" />
+                                        <span className="text-xs font-medium">{acc}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Category Grid (Only for Income/Expense) */}
+                    {(type === 'expense' || type === 'income') && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-2">Kategori</label>
+                            <div className="flex flex-wrap gap-2">
+                                {(type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setCategory(cat)}
+                                        className={cn(
+                                            "px-3 py-1.5 text-xs rounded-full border transition-all",
+                                            category === cat
+                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary font-medium"
+                                                : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
+                                        )}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Description */}
                     <div>
@@ -193,7 +271,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                             type="text"
                             value={description}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
-                            placeholder="Makan siang..."
+                            placeholder={type === 'transfer' ? 'Berita transfer...' : 'Makan siang...'}
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary text-sm"
                         />
                     </div>
@@ -207,7 +285,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         {loading ? "Menyimpan..." : (
                             <>
                                 <Check className="w-5 h-5" />
-                                Simpan Transaksi
+                                {type === 'transfer' ? 'Kirim Uang' : type === 'adjustment' ? 'Update Saldo' : 'Simpan Transaksi'}
                             </>
                         )}
                     </button>
