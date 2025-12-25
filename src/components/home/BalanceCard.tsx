@@ -88,25 +88,15 @@ export const BalanceCard = ({ name = "Total Saldo", balance, color = "from-brimo
                 )}
             </div>
 
-    /* Actions Bar (Inside Card) */
+            {/* Actions Bar (Inside Card) */}
             {(onTransfer || onWithdraw) && (
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                    {onTransfer && (
-                        <button
-                            onClick={onTransfer}
-                            className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-xs font-semibold backdrop-blur-sm transition-colors flex items-center justify-center gap-2"
-                        >
-                            Transfer
-                        </button>
-                    )}
-                    {onWithdraw && (
-                        <button
-                            onClick={onWithdraw}
-                            className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-xs font-semibold backdrop-blur-sm transition-colors flex items-center justify-center gap-2"
-                        >
-                            Tarik Tunai
-                        </button>
-                    )}
+                <div className="grid grid-cols-1 gap-3 mt-2">
+                    <button
+                        onClick={onTransfer}
+                        className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-xs font-semibold backdrop-blur-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                        Transfer / Tarik Tunai
+                    </button>
                 </div>
             )}
         </div>
