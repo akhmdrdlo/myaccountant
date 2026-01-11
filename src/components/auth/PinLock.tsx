@@ -25,6 +25,29 @@ export const PinLock = ({ onSuccess }: PinLockProps) => {
         }
     }, [pin, onSuccess]);
 
+    // Keyboard Support
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (/^[0-9]$/.test(e.key)) {
+                setPin(prev => {
+                    if (prev.length < 6) {
+                        setError(false);
+                        return prev + e.key;
+                    }
+                    return prev;
+                });
+            } else if (e.key === 'Backspace') {
+                setPin(prev => {
+                    setError(false);
+                    return prev.slice(0, -1);
+                });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const handlePress = (num: string) => {
         if (pin.length < 6) {
             setPin(prev => prev + num);
@@ -38,18 +61,18 @@ export const PinLock = ({ onSuccess }: PinLockProps) => {
     };
 
     return (
-        <div className="min-h-screen bg-brimo-bg flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-screen dark:bg-brimo flex flex-col items-center justify-center p-6 relative overflow-hidden">
             {/* Background Gradients */}
-            <div className="absolute top-0 left-0 w-full h-[50vh] -z-10 rounded-b-[40px]" />
+            <div className="absolute top-0 left-0 w-full h-[50vh] dark:bg-brimo -z-10 rounded-b-[40px]" />
 
             <div className="w-full max-w-sm flex flex-col items-center">
 
                 {/* Logo Area */}
-                <div className="mb-8 p-4 bg-slate/10 backdrop-blur-md rounded-full">
+                <div className="mb-8 p-4 bg-slate/10 dark:bg-slate/10 backdrop-blur-md rounded-full">
                     <img src="/banklogo.png" alt="Logo" className="w-16 h-16 object-contain" />
                 </div>
 
-                <h2 className="text-slate text-xl font-bold mb-8">Masukkan PIN Anda</h2>
+                <h2 className="text-slate text-xl font-bold mb-8 dark:text-white">Masukkan PIN Anda</h2>
 
                 {/* PIN Dots */}
                 <div className="flex gap-4 mb-12">
@@ -57,9 +80,9 @@ export const PinLock = ({ onSuccess }: PinLockProps) => {
                         <div
                             key={i}
                             className={`w-4 h-4 rounded-full transition-all duration-300 ${i < pin.length
-                                ? 'bg-black scale-110'
-                                : 'bg-black/30 border border-black/50'
-                                } ${error ? 'bg-red-400 animate-pulse' : ''}`}
+                                ? 'bg-black dark:bg-white scale-110'
+                                : 'bg-black/30 dark:bg-white/30 border border-black/50 dark:border-white/50'
+                                } ${error ? 'bg-red-400 dark:bg-red-400 animate-pulse' : ''}`}
                         />
                     ))}
                 </div>
@@ -70,7 +93,7 @@ export const PinLock = ({ onSuccess }: PinLockProps) => {
                         <button
                             key={num}
                             onClick={() => handlePress(num.toString())}
-                            className="w-16 h-16 rounded-full bg-slate/10 hover:bg-slate/20 backdrop-blur text-slate text-2xl font-semibold flex items-center justify-center transition-all active:scale-95 shadow-sm mx-auto"
+                            className="w-16 h-16 rounded-full bg-slate/10 dark:bg-slate/10 hover:bg-slate/20 dark:hover:bg-slate/20 backdrop-blur text-slate text-2xl font-semibold flex items-center justify-center transition-all active:scale-95 shadow-sm mx-auto"
                         >
                             {num}
                         </button>
@@ -78,20 +101,20 @@ export const PinLock = ({ onSuccess }: PinLockProps) => {
                     <div /> {/* Spacer */}
                     <button
                         onClick={() => handlePress('0')}
-                        className="w-16 h-16 rounded-full bg-slate/10 hover:bg-slate/20 backdrop-blur text-slate text-2xl font-semibold flex items-center justify-center transition-all active:scale-95 shadow-sm mx-auto"
+                        className="w-16 h-16 rounded-full bg-slate/10 dark:bg-slate/10 hover:bg-slate/20 dark:hover:bg-slate/20 backdrop-blur text-slate text-2xl font-semibold flex items-center justify-center transition-all active:scale-95 shadow-sm mx-auto"
                     >
                         0
                     </button>
                     <button
                         onClick={handleDelete}
-                        className="w-16 h-16 rounded-full flex items-center justify-center text-slate/80 hover:text-slate transition-colors active:scale-95 mx-auto"
+                        className="w-16 h-16 rounded-full flex items-center justify-center text-slate/80 dark:text-slate/80 hover:text-slate dark:hover:text-slate transition-colors active:scale-95 mx-auto"
                     >
                         <Delete className="w-8 h-8" />
                     </button>
                 </div>
 
                 <div className="mt-8 text-center">
-                    <p className="text-slate/60 text-xs">Lupa PIN? Hubungi Administrator</p>
+                    <p className="text-slate/60 dark:text-slate/60 text-xs">Lupa PIN? Hubungi Administrator</p>
                 </div>
             </div>
         </div>

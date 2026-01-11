@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
 import { Layout } from './components/layout/Layout';
 import { AccountCards } from './components/home/AccountCards';
 import { QuickActions } from './components/home/QuickActions';
@@ -12,13 +11,20 @@ import { AnalyticsView } from './components/home/AnalyticsView';
 import { AccountProfile } from './components/account/AccountProfile';
 import { PinLock } from './components/auth/PinLock';
 import { GoalForm } from './components/home/GoalForm';
-import { BudgetSettings } from './components/home/BudgetSettings'; // New
+import { BudgetSettings } from './components/home/BudgetSettings';
 import { useGoogleSheets } from './hooks/useGoogleSheets';
 import { SubscriptionTracker } from './components/home/SubscriptionTracker';
 import { useFinanceStore } from './store/useFinanceStore';
+import { useThemeStore } from './store/useThemeStore'; // Init Theme
+import { SpendingProgress } from './components/home/SpendingProgress';
 import type { TransactionInput, Goal, Budget } from './types';
 
+import { useSubscriptionAutoRecord } from './hooks/useSubscriptionAutoRecord';
+
 function App() {
+  // Auto Record Subscriptions
+  useSubscriptionAutoRecord();
+
   const { fetchTransactions, addTransaction, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useGoogleSheets();
   const {
     transactions,
@@ -32,8 +38,12 @@ function App() {
     addTransactionOptimistic,
     removeTransactionOptimistic,
     setLoading,
-    loading: storeLoading
+    loading: storeLoading,
+    getSeabankBalance // Get helper
   } = useFinanceStore();
+
+  // Theme Init
+  useThemeStore();
 
   const [activeTab, setActiveTab] = useState('home');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -216,8 +226,11 @@ function App() {
   // Get Safety Buffer from Budgets (Special Category)
   const safetyBuffer = budgets.find(b => b.category === 'Dana Darurat (Safety Buffer)')?.limit || 0;
 
+  // Sync Logic: Get Seabank Balance
+  const seabankBalance = getSeabankBalance ? getSeabankBalance() : 0;
+
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+    <Layout activeTab={activeTab} onTabChange={setActiveTab} onFabClick={() => handleOpenForm()}>
 
       {/* Home Tab */}
       {activeTab === 'home' && (
@@ -232,45 +245,48 @@ function App() {
 
           <div className="px-1 mb-6">
             <FinancialSummary />
+            <SpendingProgress />
           </div>
 
           <div className="px-1">
             <SubscriptionTracker />
 
             <div className="flex justify-between items-center mb-2 px-1">
-              <h3 className="font-semibold text-gray-700">Barang Harapan</h3>
+              <h3 className="font-semibold text-gray-700 dark:text-gray-200">Barang Harapan</h3>
               <button onClick={() => handleOpenGoalForm()} className="text-xs text-brimo-secondary font-medium hover:underline">Tambah</button>
             </div>
 
-            {goals.map(goal => (
-              <GoalCard
-                key={goal.id}
-                title={goal.name}
-                currentAmount={goal.currentAmount}
-                targetAmount={goal.targetAmount}
-                deadline={goal.deadline}
-                color={goal.color}
-                safetyBuffer={safetyBuffer} // Pass the buffer
-                onEdit={() => handleOpenGoalForm(goal)}
-              />
-            ))}
+            {goals.map(goal => {
+              // Logic Sync: If Goal is "Barang Harapan", use Seabank Balance
+              // Loosely match "Barang Harapan" or "Wishlist"
+              const isSeabankSync = goal.name.toLowerCase().includes('barang harapan') || goal.name.toLowerCase().includes('wishlist');
+              const displayAmount = isSeabankSync ? seabankBalance : goal.currentAmount;
+
+              return (
+                <GoalCard
+                  key={goal.id}
+                  title={goal.name}
+                  currentAmount={displayAmount}
+                  targetAmount={goal.targetAmount}
+                  deadline={goal.deadline}
+                  color={goal.color}
+                  safetyBuffer={safetyBuffer} // Pass the buffer
+                  onEdit={() => handleOpenGoalForm(goal)}
+                />
+              )
+            })}
             {goals.length === 0 && (
-              <p className="text-xs text-gray-400 text-center mb-4 italic">Belum ada barang harapan. Tambahkan sekarang!</p>
+              <p className="text-xs text-gray-400 dark:text-gray-200 text-center mb-4 italic">Belum ada barang harapan. Tambahkan sekarang!</p>
             )}
           </div>
 
-          {/* Recent Transcations Preview (Optional, or just header) */}
-          <div className="flex justify-between items-center mb-2 px-1">
-            <h3 className="font-semibold text-gray-700">Transaksi Terakhir</h3>
-            <button onClick={() => setActiveTab('mutasi')} className="text-xs text-brimo-secondary font-medium hover:underline">Lihat Semua</button>
-          </div>
         </>
       )}
 
       {/* Mutasi Tab */}
       {activeTab === 'mutasi' && (
         <div className="mt-4">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">Mutasi Rekening</h2>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4 px-2">Mutasi Rekening</h2>
           <TransactionList transactions={transactions} loading={storeLoading} />
         </div>
       )}
@@ -295,13 +311,7 @@ function App() {
         <AccountProfile />
       )}
 
-      {/* Manual Add Button (FAB) */}
-      <button
-        onClick={() => handleOpenForm()}
-        className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-brimo-accent hover:bg-orange-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-orange-200 z-40 transition-transform active:scale-95"
-      >
-        <Plus className="w-8 h-8" strokeWidth={2.5} />
-      </button>
+
 
       <TransactionForm
         isOpen={isFormOpen}
@@ -309,6 +319,7 @@ function App() {
         initialData={formInitialData}
         onSubmit={handleAddTransaction}
         loading={storeLoading}
+        accounts={useFinanceStore.getState().getAccountBalances()}
       />
 
       <GoalForm

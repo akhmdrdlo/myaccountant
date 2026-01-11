@@ -55,15 +55,15 @@ export const SubscriptionTracker = () => {
     };
 
     return (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mt-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mt-6 transition-colors">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-gray-700 dark:text-gray-100 flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     Tagihan Rutin
                 </h3>
                 <button
                     onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="p-1.5 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-purple-600"
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition text-gray-400 hover:text-purple-600 dark:hover:text-purple-400"
                 >
                     {isSettingsOpen ? <X size={20} /> : <Plus size={20} />}
                 </button>
@@ -116,23 +116,23 @@ export const SubscriptionTracker = () => {
 
             <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {(subscriptions || []).map(sub => (
-                    <div key={sub.id} className="flex justify-between items-center p-3 bg-gray-50 border border-gray-100 rounded-xl hover:bg-white hover:shadow-sm transition-all group">
+                    <div key={sub.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 rounded-xl hover:bg-white dark:hover:bg-gray-800 hover:shadow-sm transition-all group">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-white flex flex-col items-center justify-center overflow-hidden border border-gray-100 shadow-sm text-purple-600">
+                            <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 flex flex-col items-center justify-center overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm text-purple-600 dark:text-purple-400">
                                 <span className="text-[9px] text-gray-400 font-bold uppercase">Tgl</span>
-                                <span className="text-sm font-bold">{sub.billingDate}</span>
+                                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{sub.billingDate}</span>
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-gray-700">{sub.name}</p>
+                                <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{sub.name}</p>
                                 <div className="flex items-center gap-2">
-                                    <p className="text-xs text-gray-500">{formatCurrency(sub.amount)}</p>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">{sub.category}</span>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(sub.amount)}</p>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{sub.category}</span>
                                 </div>
                             </div>
                         </div>
                         <button
                             onClick={() => deleteSubscription(sub.id)}
-                            className="text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                            className="text-gray-300 hover:text-red-500 p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition opacity-0 group-hover:opacity-100"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>

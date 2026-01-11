@@ -104,15 +104,15 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
     };
 
     if (loading && transactions.length === 0) {
-        return <div className="p-4 text-center text-gray-500 text-sm">Memuat transaksi...</div>;
+        return <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">Memuat transaksi...</div>;
     }
 
     return (
         <div className="pb-24"> {/* Extra padding for FAB */}
             <div className="px-1 mb-4">
                 <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold text-gray-700">Riwayat Transaksi</h3>
-                    <div className="text-xs text-gray-500">
+                    <h3 className="font-semibold text-gray-700 dark:text-gray-200">Riwayat Transaksi</h3>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                         Total: {filteredAndSorted.length} Transaksi
                     </div>
                 </div>
@@ -208,63 +208,78 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
                         <Search className="w-8 h-8 text-gray-300" />
                     </div>
-                    <p className="text-sm">Tidak ditemukan transaksi</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-200">Tidak ditemukan transaksi</p>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {Object.keys(grouped).map((dateKey) => (
-                        <div key={dateKey}>
-                            <p className="text-[11px] text-gray-500 font-medium mb-2 sticky top-0 bg-brimo-bg/95 backdrop-blur-sm py-1 z-10 px-1">
-                                {formatDateLabel(dateKey)}
-                            </p>
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                {grouped[dateKey].map((t, idx) => {
-                                    const Icon = getCategoryIcon(t.category);
-                                    const isExpense = t.type === 'expense';
-                                    const isLast = idx === grouped[dateKey].length - 1;
+                    {Object.keys(grouped).map((dateKey) => {
+                        // Calculate Daily Total
+                        const dailyTransactions = grouped[dateKey];
+                        const dailyIncome = dailyTransactions.reduce((acc, curr) =>
+                            curr.type === 'income' && curr.category !== 'Transfer / Tarik Tunai' ? acc + curr.amount : acc, 0);
+                        const dailyExpense = dailyTransactions.reduce((acc, curr) =>
+                            curr.type === 'expense' && curr.category !== 'Transfer / Tarik Tunai' ? acc + curr.amount : acc, 0);
+                        const dailyNet = dailyIncome - dailyExpense;
 
-                                    return (
-                                        <div
-                                            key={t.id}
-                                            className={cn(
-                                                "flex items-center justify-between p-3.5 hover:bg-gray-50 transition-colors cursor-pointer",
-                                                !isLast && "border-b border-gray-50"
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", isExpense ? "bg-red-50" : "bg-green-50")}>
-                                                    <Icon className={cn("w-5 h-5", isExpense ? "text-red-500" : "text-green-500")} />
+                        return (
+                            <div key={dateKey}>
+                                <div className="flex justify-between items-center sticky top-0 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-2 z-10 px-3 border-b border-gray-200 dark:border-gray-800 transition-colors">
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                                        {formatDateLabel(dateKey)}
+                                    </p>
+                                    <p className={cn("text-[10px] font-bold", dailyNet >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400")}>
+                                        {dailyNet > 0 ? "+" : ""}{formatAmount(dailyNet)}
+                                    </p>
+                                </div>
+                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+                                    {grouped[dateKey].map((t, idx) => {
+                                        const Icon = getCategoryIcon(t.category);
+                                        const isExpense = t.type === 'expense';
+                                        const isLast = idx === grouped[dateKey].length - 1;
+
+                                        return (
+                                            <div
+                                                key={t.id}
+                                                className={cn(
+                                                    "flex items-center justify-between p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800",
+                                                    !isLast && "border-b border-gray-50 dark:border-gray-800"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", isExpense ? "bg-red-50 dark:bg-red-900/20" : "bg-green-50 dark:bg-green-900/20")}>
+                                                        <Icon className={cn("w-5 h-5", isExpense ? "text-red-500 dark:text-red-400" : "text-green-500 dark:text-green-400")} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 capitalize">{t.category}</p>
+                                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-1">{t.description || t.type}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-gray-700 capitalize">{t.category}</p>
-                                                    <p className="text-[10px] text-gray-400 line-clamp-1">{t.description || t.type}</p>
+                                                <div className="text-right">
+                                                    <p className={cn("text-sm font-bold", isExpense ? "text-red-500" : "text-green-500")}>
+                                                        {isExpense ? "-" : "+"}Rp {formatAmount(t.amount)}
+                                                    </p>
+                                                    <span className={cn(
+                                                        "text-[9px] px-1.5 py-0.5 rounded-full",
+                                                        t.status === 'completed' ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
+                                                    )}>
+                                                        {t.status === 'completed' ? "Berhasil" : "Pending"}
+                                                    </span>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className={cn("text-sm font-bold", isExpense ? "text-red-500" : "text-green-500")}>
-                                                    {isExpense ? "-" : "+"}Rp {formatAmount(t.amount)}
-                                                </p>
-                                                <span className={cn(
-                                                    "text-[9px] px-1.5 py-0.5 rounded-full",
-                                                    t.status === 'completed' ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
-                                                )}>
-                                                    {t.status === 'completed' ? "Berhasil" : "Pending"}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
 
                     {/* Load More Button */}
                     {hasMore && (
                         <button
                             onClick={handleLoadMore}
-                            className="w-full py-3 bg-white border border-gray-200 text-gray-600 font-medium text-sm rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-white dark:bg-brimo-bg border border-gray-200 dark:border-gray-200 text-gray-600 dark:text-gray-200 font-medium text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                         >
-                            <ArrowDown className="w-4 h-4" />
+                            <ArrowDown className="w-4 h-4 dark:text-white" />
                             Tampilkan Lebih Banyak
                         </button>
                     )}

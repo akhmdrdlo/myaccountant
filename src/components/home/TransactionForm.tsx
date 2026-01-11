@@ -9,10 +9,11 @@ interface TransactionFormProps {
     initialData?: Partial<TransactionInput>;
     onSubmit: (data: TransactionInput) => Promise<boolean>;
     loading?: boolean;
+    accounts?: { name: string; balance: number }[];
 }
 
 const EXPENSE_CATEGORIES = [
-    'Makan Weekday', 'Makan Weekend', 'Transport', 'Utilitas', 'Kos (Tabungan)', 'Jajan/Hobi', 'Admin Bank'
+    'Makan Weekday', 'Makan Weekend', 'Transport', 'Utilitas', 'Kos (Tabungan)', 'Jajan/Hobi', 'Admin Bank', 'Penyesuaian Saldo'
 ];
 
 const INCOME_CATEGORIES = [
@@ -47,7 +48,7 @@ const KEYWORD_MAP: Record<string, string> = {
     'transfer': 'Admin Bank', // Potentially admin fee
 };
 
-export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading }: TransactionFormProps) => {
+export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading, accounts = [] }: TransactionFormProps) => {
     const [type, setType] = useState<'income' | 'expense' | 'transfer' | 'adjustment'>('expense');
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
@@ -93,30 +94,59 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!amount) return;
-        if (type !== 'transfer' && type !== 'adjustment' && !category) return; // Category required for income/expense
+        if (type !== 'transfer' && type !== 'adjustment' && !category) return;
 
-        const numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
-
-        // For Transfer/Adjustment, we might default the category or handle it specially
+        let numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
+        let finalType = type;
         let finalCategory = category;
-        if (type === 'transfer') finalCategory = 'Transfer';
-        if (type === 'adjustment') finalCategory = 'Adjustment';
+        let finalDescription = description;
+
+        // Smart Adjustment Logic
+        if (type === 'adjustment') {
+            const currentAccountData = accounts.find(a => a.name === account);
+            const currentBalance = currentAccountData?.balance || 0;
+            const targetBalance = numAmount; // User inputs the ACTUAL balance they have
+
+            const diff = targetBalance - currentBalance;
+
+            if (diff === 0) {
+                onClose(); // No change needed
+                return;
+            }
+
+            if (diff > 0) {
+                // Balance increased (Income)
+                finalType = 'income';
+                numAmount = diff;
+                finalCategory = 'Penyesuaian Saldo';
+                finalDescription = description || `Koreksi Saldo (+${new Intl.NumberFormat('id-ID').format(diff)})`;
+            } else {
+                // Balance decreased (Expense)
+                finalType = 'expense';
+                numAmount = Math.abs(diff); // Amount must be positive
+                finalCategory = 'Penyesuaian Saldo';
+                finalDescription = description || `Koreksi Saldo (-${new Intl.NumberFormat('id-ID').format(Math.abs(diff))})`;
+            }
+        } else if (type === 'transfer') {
+            finalCategory = 'Transfer';
+            finalDescription = description || `Transfer to ${toAccount}`;
+        }
 
         const success = await onSubmit({
-            type,
+            type: finalType as any, // 'adjustment' is handled above and converted
             amount: numAmount,
             category: finalCategory,
-            description: description || (type === 'transfer' ? `Transfer to ${toAccount}` : 'Adjustment'),
+            description: finalDescription,
             account,
             toAccount: type === 'transfer' ? toAccount : undefined
         });
 
         if (success) {
             onClose();
-            // Reset fields
             setAmount('');
             setDescription('');
             setCategory('');
+            setType('expense'); // Reset to default
         }
     };
 
@@ -133,23 +163,25 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
             {/* Bottom Sheet */}
             <div
                 className={cn(
-                    "fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-[70] shadow-2xl transition-transform duration-300 ease-out transform max-w-md mx-auto h-[90vh] overflow-y-auto",
+                    "fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl p-6 z-[70] shadow-2xl transition-transform duration-300 ease-out transform max-w-md mx-auto h-[90vh] overflow-y-auto border-t border-gray-100 dark:border-gray-800",
                     isOpen ? "translate-y-0" : "translate-y-full"
                 )}
             >
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-gray-800">Catat Transaksi</h3>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                        {type === 'adjustment' ? 'Penyesuaian Saldo' : 'Catat Transaksi'}
+                    </h3>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     >
-                        <X className="w-5 h-5 text-gray-500" />
+                        <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5 pb-10">
                     {/* Type Navigation */}
-                    <div className="flex p-1 bg-gray-100 rounded-xl overflow-x-auto scrollbar-hide">
+                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-x-auto scrollbar-hide">
                         {[
                             { id: 'expense', label: 'Pengeluaran', color: 'text-red-500' },
                             { id: 'income', label: 'Pemasukan', color: 'text-green-500' },
@@ -162,7 +194,9 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                 onClick={() => setType(t.id as any)}
                                 className={cn(
                                     "flex-1 min-w-[90px] py-2.5 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
-                                    type === t.id ? `bg-white ${t.color} shadow-sm` : "text-gray-500 hover:text-gray-700"
+                                    type === t.id
+                                        ? `bg-white dark:bg-gray-700 ${t.color} shadow-sm`
+                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                                 )}
                             >
                                 {t.icon && <t.icon className="w-3.5 h-3.5" />}
@@ -173,7 +207,9 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
 
                     {/* Amount Input */}
                     <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Nominal</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                            {type === 'adjustment' ? 'Saldo Sebenarnya Saat Ini' : 'Nominal'}
+                        </label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">Rp</span>
                             <input
@@ -181,7 +217,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                 value={amount}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
                                 placeholder="0"
-                                className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary font-bold text-2xl text-gray-800"
+                                className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary font-bold text-2xl text-gray-800 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                                 required
                                 autoFocus
                             />
@@ -191,7 +227,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                     {/* Source Account Selector */}
                     <div>
                         <label className="block text-xs font-medium text-gray-500 mb-2">
-                            {type === 'income' ? 'Masuk ke Akun' : 'Sumber Dana'}
+                            {type === 'income' ? 'Masuk ke Akun' : type === 'adjustment' ? 'Akun yang Disesuaikan' : 'Sumber Dana'}
                         </label>
                         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                             {ACCOUNTS.map(acc => (
@@ -202,8 +238,8 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                     className={cn(
                                         "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
                                         account === acc
-                                            ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm"
-                                            : "bg-white border-gray-200 text-gray-600"
+                                            ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                            : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                                     )}
                                 >
                                     <Wallet className="w-3.5 h-3.5" />
@@ -228,8 +264,8 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                         className={cn(
                                             "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
                                             toAccount === acc
-                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm"
-                                                : "bg-white border-gray-200 text-gray-600"
+                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                                : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                                         )}
                                     >
                                         <Wallet className="w-3.5 h-3.5" />
@@ -253,8 +289,8 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                         className={cn(
                                             "px-3 py-1.5 text-xs rounded-full border transition-all",
                                             category === cat
-                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary font-medium"
-                                                : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
+                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary font-medium dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                                : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600"
                                         )}
                                     >
                                         {cat}
@@ -271,8 +307,8 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                             type="text"
                             value={description}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
-                            placeholder={type === 'transfer' ? 'Berita transfer...' : 'Makan siang...'}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary text-sm"
+                            placeholder={type === 'transfer' ? 'Berita transfer...' : type === 'adjustment' ? 'Keterangan koreksi...' : 'Makan siang...'}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                         />
                     </div>
 

@@ -67,15 +67,15 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
     return (
         <div className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="font-semibold text-gray-700">Budget Bulan Ini</h3>
+                <h3 className="font-semibold text-gray-700 dark:text-gray-200">Budget Bulan Ini</h3>
                 <button onClick={onOpenSettings} className="text-xs text-brimo-secondary font-medium hover:underline">Atur</button>
             </div>
 
             <div className="space-y-3">
                 {Object.entries(budgetStatus).map(([category, data]) => (
-                    <div key={category} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                    <div key={category} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm transition-colors">
                         <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold text-gray-700">{category}</span>
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-200">{category}</span>
                             <span className={cn(
                                 "text-[10px] font-bold",
                                 data.percent > 100 ? "text-red-500" : "text-gray-500"
@@ -84,7 +84,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
                             </span>
                         </div>
 
-                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-1.5">
+                        <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-1.5">
                             <div
                                 className={cn("h-full rounded-full transition-all", getProgressColor(data.percent))}
                                 style={{ width: `${Math.min(100, data.percent)}%` }}

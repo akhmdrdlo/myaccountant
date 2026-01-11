@@ -63,69 +63,69 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-4 transition-all duration-300">
-            <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95">
+            <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 border border-transparent dark:border-gray-800">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
-                        <div className="p-2 bg-indigo-50 rounded-lg">
-                            <Target className="w-5 h-5 text-indigo-600" />
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-800">
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                             {initialData ? 'Edit Barang Harapan' : 'Tambah Barang Harapan'}
                         </h2>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-6 h-6 text-gray-500" />
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                        <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama Impian</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nama Impian</label>
                         <input
                             type="text"
                             required
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Contoh: Laptop Baru"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Target (Rp)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target (Rp)</label>
                             <input
                                 type="number"
                                 required
                                 value={targetAmount}
                                 onChange={(e) => setTargetAmount(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Terkumpul (Rp / Formula)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Terkumpul (Rp / Formula)</label>
                             <input
                                 type="text"
                                 value={currentAmount}
                                 onChange={(e) => setCurrentAmount(e.target.value)}
                                 placeholder="0 atau =Sheet!A1"
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Waktu (Opsional)</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Waktu (Opsional)</label>
                         <input
                             type="date"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Warna Progress</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Warna Progress</label>
                         <div className="flex gap-3">
                             {colors.map((c) => (
                                 <button
@@ -135,7 +135,7 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
                                     className={cn(
                                         "w-8 h-8 rounded-full border-2 transition-all",
                                         c.value,
-                                        color === c.value ? "border-gray-800 scale-110" : "border-transparent"
+                                        color === c.value ? "border-gray-800 dark:border-white scale-110" : "border-transparent"
                                     )}
                                     title={c.name}
                                 />

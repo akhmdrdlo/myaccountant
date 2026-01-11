@@ -63,31 +63,31 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
     };
 
     return (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mb-4 transition-colors">
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50" : "bg-indigo-50")}>
+                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50 dark:bg-red-900/20" : "bg-indigo-50 dark:bg-indigo-900/20")}>
                         {isRisky && canAfford ? (
-                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                         ) : (
-                            <Target className="w-5 h-5 text-indigo-600" />
+                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         )}
                     </div>
                     <div>
-                        <h4 className="font-bold text-gray-800 text-sm">{title}</h4>
+                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{title}</h4>
                         {deadline && <p className="text-[10px] text-gray-400">Target: {deadline}</p>}
                     </div>
                 </div>
                 <div className="text-right flex flex-col items-end">
-                    <button onClick={onEdit} className="text-[10px] text-gray-400 hover:text-indigo-600 mb-1">
+                    <button onClick={onEdit} className="text-[10px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-1">
                         Edit
                     </button>
-                    <p className="text-xs font-bold text-indigo-600">{Math.round(percentage)}%</p>
+                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{Math.round(percentage)}%</p>
                 </div>
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-2 relative">
+            <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2 relative">
                 {/* Visualizing Safety Buffer impact if affordable but risky */}
                 <div
                     className={cn("h-full rounded-full transition-all duration-1000 ease-out", color)}

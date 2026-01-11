@@ -56,12 +56,12 @@ export const QuickActions = ({ onActionClick, transactions = [] }: QuickActionsP
                     >
                         <div
                             className={cn(
-                                "w-12 h-12 rounded-full flex items-center justify-center shadow-sm shadow-gray-200 transition-transform group-hover:scale-105 active:scale-95 border border-white bg-white"
+                                "w-12 h-12 rounded-full flex items-center justify-center shadow-sm shadow-gray-200 dark:shadow-none transition-transform group-hover:scale-105 active:scale-95 border border-white dark:border-gray-700 bg-white dark:bg-gray-800"
                             )}
                         >
                             <Icon className={cn("w-6 h-6", action.color)} strokeWidth={1.5} />
                         </div>
-                        <span className="text-[11px] font-medium text-gray-600 text-center leading-tight">
+                        <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400 text-center leading-tight">
                             {action.label}
                         </span>
                     </button>

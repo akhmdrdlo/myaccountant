@@ -23,6 +23,7 @@ interface FinanceStore {
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
     getAccountBalances: () => { name: string; balance: number; color: string }[];
+    getSeabankBalance: () => number;
     setGoals: (goals: Goal[]) => void;
     setBudgets: (budgets: Budget[]) => void;
     setSubscriptions: (subscriptions: Subscription[]) => void;
@@ -62,8 +63,10 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
                 return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             });
 
-            const monthlyIncome = monthlyTx.reduce((acc, curr) => curr.type === 'income' ? acc + curr.amount : acc, 0);
-            const monthlyExpense = monthlyTx.reduce((acc, curr) => curr.type === 'expense' ? acc + curr.amount : acc, 0);
+            const monthlyIncome = monthlyTx.reduce((acc, curr) =>
+                curr.type === 'income' && !['transfer / tarik tunai', 'penyesuaian saldo'].includes(curr.category.toLowerCase()) ? acc + curr.amount : acc, 0);
+            const monthlyExpense = monthlyTx.reduce((acc, curr) =>
+                curr.type === 'expense' && !['transfer / tarik tunai', 'penyesuaian saldo'].includes(curr.category.toLowerCase()) ? acc + curr.amount : acc, 0);
 
             // Daily Safe Limit Logic
             const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -162,6 +165,22 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
                 color: getColor(acc.name)
             };
         });
+    },
+
+    getSeabankBalance: () => {
+        const state = get();
+        const seabankAcc = state.accounts.find(a => a.name.toLowerCase().includes('seabank'));
+        if (!seabankAcc) return 0;
+
+        const accIncome = state.transactions
+            .filter((t: Transaction) => t.account === seabankAcc.name && t.type === 'income')
+            .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+        const accExpense = state.transactions
+            .filter((t: Transaction) => t.account === seabankAcc.name && t.type === 'expense')
+            .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+
+        return (seabankAcc.initialBalance || 0) + accIncome - accExpense;
     },
 
     setGoals: (goals) => set({ goals }),

@@ -10,6 +10,14 @@ const MOCK_TRANSACTIONS: Transaction[] = [
     { id: '1', timestamp: new Date().toISOString(), type: 'income', category: 'Gaji', amount: 5000000, description: 'Gaji Bulanan', account: 'Bank BTN', status: 'completed' },
 ];
 
+const MOCK_GOALS: Goal[] = [
+    { id: 'g1', name: 'MacBook Air', targetAmount: 15000000, currentAmount: 5000000, deadline: '2024-12-31', color: '#FF5733' }
+];
+
+const MOCK_SUBS: Subscription[] = [
+    { id: 's1', name: 'Netflix', amount: 186000, billingDate: 25, category: 'Hiburan' }
+];
+
 export const useGoogleSheets = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -24,9 +32,9 @@ export const useGoogleSheets = () => {
             setLoading(false);
             return {
                 transactions: MOCK_TRANSACTIONS,
-                goals: [],
+                goals: MOCK_GOALS,
                 budgets: [],
-                subscriptions: [] // Mock empty or some defaults if you want
+                subscriptions: MOCK_SUBS
             };
         }
 
@@ -64,6 +72,7 @@ export const useGoogleSheets = () => {
                     category: s.category || 'General'
                 })) : [];
 
+                console.log(`[useGoogleSheets] Fetched: ${cleanData.length} tx, ${goals.length} goals, ${subscriptions.length} subs`);
                 return {
                     transactions: cleanData,
                     metadata: response.data.metadata,
