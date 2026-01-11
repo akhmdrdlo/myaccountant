@@ -8,11 +8,10 @@ export const FinancialSummary = () => {
         monthlyIncome,
         monthlyExpense,
         dailySafeLimit,
-        transactions,
-        getSeabankBalance
+        transactions
     } = useFinanceStore();
 
-    const seabankBalance = getSeabankBalance ? getSeabankBalance() : 0;
+
 
     // 1. Daily Budget Logic
     const todaySpend = transactions

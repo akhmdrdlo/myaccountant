@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { cn } from '../../lib/utils';
+
 
 export const SpendingProgress = () => {
     const { transactions, monthlyIncome } = useFinanceStore();

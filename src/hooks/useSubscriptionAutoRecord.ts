@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { useGoogleSheets } from '../hooks/useGoogleSheets';
-import type { Subscription, TransactionInput } from '../types';
+import type { TransactionInput } from '../types';
 
 const CATEGORY_MAP: Record<string, string> = {
     'Internet': 'Utilitas',
