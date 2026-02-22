@@ -66,7 +66,7 @@ export const InvestmentView = () => {
             symbol: formData.symbol,
             type: formData.type || 'Lainnya',
             averagePrice: Number(formData.averagePrice) || 0,
-            totalUnits: Number(formData.totalUnits) || 0,
+            totalUnits: 1, // UX Simplified: User only enters Total Modal (averagePrice)
             currentPrice: Number(formData.currentPrice) || 0,
             color: formData.color || '#6366f1'
         };
@@ -197,7 +197,7 @@ export const InvestmentView = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-gray-800 dark:text-gray-100">{inv.name}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{inv.type} • {inv.totalUnits.toLocaleString()} Unit</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{inv.type}</p>
                                         </div>
                                     </div>
                                     <div className="flex space-x-2">
@@ -286,37 +286,27 @@ export const InvestmentView = () => {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Unit</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            step="any"
-                                            value={formData.totalUnits || ''}
-                                            onChange={e => setFormData({ ...formData, totalUnits: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Harga Beli Rata-rata</label>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Modal Investasi</label>
                                         <input
                                             required
                                             type="number"
                                             value={formData.averagePrice || ''}
                                             onChange={e => setFormData({ ...formData, averagePrice: Number(e.target.value) })}
                                             className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            placeholder="Cth: 100000"
                                         />
                                     </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Harga Kinerja Terkini (Current Price)</label>
-                                    <input
-                                        required
-                                        type="number"
-                                        value={formData.currentPrice || ''}
-                                        onChange={e => setFormData({ ...formData, currentPrice: Number(e.target.value) })}
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold text-brimo-primary dark:text-blue-400"
-                                    />
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nilai Saat Ini</label>
+                                        <input
+                                            required
+                                            type="number"
+                                            value={formData.currentPrice || ''}
+                                            onChange={e => setFormData({ ...formData, currentPrice: Number(e.target.value) })}
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold text-brimo-primary dark:text-blue-400"
+                                            placeholder="Cth: 105000"
+                                        />
+                                    </div>
                                 </div>
 
                                 {!editingInv && (
@@ -342,7 +332,7 @@ export const InvestmentView = () => {
                                                     {accounts.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
                                                 </select>
                                                 <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
-                                                    <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))} akan ditambahkan.</span>
+                                                    <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency(formData.averagePrice || 0)} akan ditambahkan.</span>
                                                 </p>
                                             </div>
                                         )}
