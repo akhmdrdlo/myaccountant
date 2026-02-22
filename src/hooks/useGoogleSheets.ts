@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
-import type { Transaction, TransactionInput, ApiResponse, Goal, Budget, Subscription } from '../types';
+import type { Transaction, TransactionInput, ApiResponse, Goal, Budget, Subscription, Investment } from '../types';
 
 // TODO: User needs to provide this URL. Using placeholder for now.
 const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || '';
@@ -22,7 +22,7 @@ export const useGoogleSheets = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTransactions = useCallback(async (): Promise<{ transactions: Transaction[], metadata?: any, goals?: Goal[], budgets?: Budget[], subscriptions?: Subscription[] }> => {
+    const fetchTransactions = useCallback(async (): Promise<{ transactions: Transaction[], metadata?: any, goals?: Goal[], budgets?: Budget[], subscriptions?: Subscription[], investments?: Investment[] }> => {
         setLoading(true);
         setError(null);
 
@@ -34,7 +34,8 @@ export const useGoogleSheets = () => {
                 transactions: MOCK_TRANSACTIONS,
                 goals: MOCK_GOALS,
                 budgets: [],
-                subscriptions: MOCK_SUBS
+                subscriptions: MOCK_SUBS,
+                investments: []
             };
         }
 
@@ -72,13 +73,26 @@ export const useGoogleSheets = () => {
                     category: s.category || 'General'
                 })) : [];
 
-                console.log(`[useGoogleSheets] Fetched: ${cleanData.length} tx, ${goals.length} goals, ${subscriptions.length} subs`);
+                // New: Parse Investments
+                const investments: Investment[] = (response.data as any).investments ? (response.data as any).investments.map((i: any) => ({
+                    id: i.id || crypto.randomUUID(),
+                    name: i.name,
+                    symbol: i.symbol || '',
+                    type: i.type || 'Lainnya',
+                    averagePrice: Number(i.average_price) || 0,
+                    totalUnits: Number(i.total_units) || 0,
+                    currentPrice: Number(i.current_price) || 0,
+                    color: i.color || '#6366f1'
+                })) : [];
+
+                console.log(`[useGoogleSheets] Fetched: ${cleanData.length} tx, ${goals.length} goals, ${subscriptions.length} subs, ${investments.length} investments`);
                 return {
                     transactions: cleanData,
                     metadata: response.data.metadata,
                     goals,
                     budgets,
-                    subscriptions
+                    subscriptions,
+                    investments
                 };
             } else {
                 return { transactions: [] };
@@ -124,6 +138,11 @@ export const useGoogleSheets = () => {
     const addSubscription = useCallback((sub: Subscription) => sendToGas('addSubscription', sub), []);
     const deleteSubscription = useCallback((id: string) => sendToGas('deleteSubscription', { id }), []);
 
+    // New Investment Actions
+    const addInvestment = useCallback((inv: Investment) => sendToGas('addInvestment', inv), []);
+    const updateInvestment = useCallback((inv: Investment) => sendToGas('updateInvestment', inv), []);
+    const deleteInvestment = useCallback((id: string) => sendToGas('deleteInvestment', { id }), []);
+
     return {
         fetchTransactions,
         addTransaction,
@@ -133,6 +152,9 @@ export const useGoogleSheets = () => {
         saveBudgets,
         addSubscription,
         deleteSubscription,
+        addInvestment,
+        updateInvestment,
+        deleteInvestment,
         loading,
         error
     };

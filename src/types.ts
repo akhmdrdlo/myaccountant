@@ -17,6 +17,7 @@ export interface ApiResponse<T> {
     data?: T;
     goals?: any[];
     budgets?: any[];
+    investments?: any[];
     metadata?: {
         accounts?: { name: string; initialBalance: number }[];
         expenseCategories?: string[];
@@ -24,6 +25,17 @@ export interface ApiResponse<T> {
     };
     message?: string;
     id?: string;
+}
+
+export interface Investment {
+    id: string;
+    name: string;
+    symbol?: string;
+    type: string;
+    averagePrice: number;
+    totalUnits: number;
+    currentPrice: number;
+    color?: string;
 }
 
 export interface Goal {

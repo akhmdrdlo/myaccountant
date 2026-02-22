@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, Goal, Budget, Subscription } from '../types';
+import type { Transaction, Goal, Budget, Subscription, Investment } from '../types';
 
 interface FinanceStore {
     transactions: Transaction[];
@@ -13,6 +13,7 @@ interface FinanceStore {
     goals: Goal[];
     budgets: Budget[];
     subscriptions: Subscription[];
+    investments: Investment[];
     loading: boolean;
     error: string | null;
 
@@ -27,6 +28,8 @@ interface FinanceStore {
     setGoals: (goals: Goal[]) => void;
     setBudgets: (budgets: Budget[]) => void;
     setSubscriptions: (subscriptions: Subscription[]) => void;
+    setInvestments: (investments: Investment[]) => void;
+    getInvestmentTotal: () => number;
 }
 
 export const useFinanceStore = create<FinanceStore>((set, get) => ({
@@ -44,6 +47,7 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
     goals: [],
     budgets: [],
     subscriptions: [],
+    investments: [],
 
     setTransactions: (transactions) => {
         set((state: FinanceStore) => {
@@ -186,4 +190,9 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
     setGoals: (goals) => set({ goals }),
     setBudgets: (budgets) => set({ budgets }),
     setSubscriptions: (subscriptions) => set({ subscriptions }),
+    setInvestments: (investments) => set({ investments }),
+    getInvestmentTotal: () => {
+        const { investments } = get();
+        return investments.reduce((sum, inv) => sum + (inv.currentPrice * inv.totalUnits), 0);
+    },
 }));

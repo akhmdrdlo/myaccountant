@@ -9,6 +9,7 @@ import { GoalCard } from './components/home/GoalCard';
 import { BudgetList } from './components/home/BudgetList';
 import { AnalyticsView } from './components/home/AnalyticsView';
 import { AccountProfile } from './components/account/AccountProfile';
+import { InvestmentView } from './components/home/InvestmentView';
 import { PinLock } from './components/auth/PinLock';
 import { GoalForm } from './components/home/GoalForm';
 import { BudgetSettings } from './components/home/BudgetSettings';
@@ -290,6 +291,9 @@ function App() {
           <TransactionList transactions={transactions} loading={storeLoading} />
         </div>
       )}
+
+      {/* Investasi Tab */}
+      {activeTab === 'investasi' && <InvestmentView />}
 
       {/* Analytics Tab */}
       {activeTab === 'analytics' && (

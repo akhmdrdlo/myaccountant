@@ -1,11 +1,11 @@
-import { Home, FileText, User, PieChart, Plus } from 'lucide-react';
+import { Home, FileText, User, PieChart, Plus, TrendingUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
-// import { useState } from 'react'; // Removed unused
 
 // Define navigation items
 const NAV_ITEMS = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'mutasi', label: 'Mutasi', icon: FileText }, // History
+    { id: 'investasi', label: 'Investasi', icon: TrendingUp },
     { id: 'analytics', label: 'Analisis', icon: PieChart },
     { id: 'akun', label: 'Akun', icon: User },
 ];
@@ -20,14 +20,16 @@ export const BottomNav = ({ activeTab, onTabChange, onFabClick }: BottomNavProps
     // const [activeTab, setActiveTab] = useState('home'); // Removed internal state
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-6 py-2 pb-4 z-50">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-2 sm:px-6 py-2 pb-4 z-50">
             <div className="flex justify-between items-center max-w-md mx-auto">
                 {/* Left Side */}
-                <NavItem item={NAV_ITEMS[0]} activeTab={activeTab} onTabChange={onTabChange} />
-                <NavItem item={NAV_ITEMS[1]} activeTab={activeTab} onTabChange={onTabChange} />
+                <div className="flex flex-1 justify-evenly">
+                    <NavItem item={NAV_ITEMS[0]} activeTab={activeTab} onTabChange={onTabChange} />
+                    <NavItem item={NAV_ITEMS[1]} activeTab={activeTab} onTabChange={onTabChange} />
+                </div>
 
                 {/* Center FAB */}
-                <div className="relative -top-5">
+                <div className="relative -top-5 shrink-0 mx-2">
                     <button
                         onClick={onFabClick}
                         className="w-14 h-14 bg-brimo-accent hover:bg-orange-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-orange-200 border-4 border-white dark:border-gray-900 transition-transform active:scale-95"
@@ -38,8 +40,11 @@ export const BottomNav = ({ activeTab, onTabChange, onFabClick }: BottomNavProps
                 </div>
 
                 {/* Right Side */}
-                <NavItem item={NAV_ITEMS[2]} activeTab={activeTab} onTabChange={onTabChange} />
-                <NavItem item={NAV_ITEMS[3]} activeTab={activeTab} onTabChange={onTabChange} />
+                <div className="flex flex-1 justify-evenly">
+                    <NavItem item={NAV_ITEMS[2]} activeTab={activeTab} onTabChange={onTabChange} />
+                    <NavItem item={NAV_ITEMS[3]} activeTab={activeTab} onTabChange={onTabChange} />
+                    <NavItem item={NAV_ITEMS[4]} activeTab={activeTab} onTabChange={onTabChange} />
+                </div>
             </div>
         </nav>
     );
@@ -53,7 +58,7 @@ const NavItem = ({ item, activeTab, onTabChange }: { item: any, activeTab: strin
     return (
         <button
             onClick={() => onTabChange(item.id)}
-            className="flex flex-col items-center gap-1 group w-16 pt-3"
+            className="flex flex-col items-center gap-1 group w-14 sm:w-16 pt-3"
         >
             <div
                 className={cn(
