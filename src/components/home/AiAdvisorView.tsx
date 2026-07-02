@@ -13,7 +13,7 @@ interface AiAdvisorViewProps {
 }
 
 export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
-    const { transactions, budgets, balance } = useFinanceStore();
+    const { transactions, budgets, goals, subscriptions, investments } = useFinanceStore();
     const [messages, setMessages] = useState<Message[]>([
         {
             sender: 'ai',
@@ -49,8 +49,53 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
             let aiText = '';
             const query = text.toLowerCase();
 
-            if (query.includes('analisa') || query.includes('kesehatan') || query.includes('rekomendasi') || query.includes('3 poin')) {
-                // Dynamically compile insights based on actual budget & transactions!
+            if (query.includes('investasi') || query.includes('saham') || query.includes('reksadana') || query.includes('crypto')) {
+                const totalVal = investments.reduce((sum, inv) => sum + (inv.currentPrice * inv.totalUnits), 0);
+                if (investments.length === 0) {
+                    aiText = `Kamu belum memiliki portofolio investasi terdaftar di Rplanner. 
+
+💡 **Saran AI:** Sangat direkomendasikan untuk menyisihkan minimal 10-20% pendapatan bulanan kamu langsung di awal bulan ke instrumen reksadana pasar uang atau saham untuk masa depan! Kamu bisa menambahkannya di tab **Investasi**.`;
+                } else {
+                    const invList = investments.map((inv, i) => `${i + 1}. **${inv.name}** (${inv.symbol || 'Tanpa Simbol'}): ${formatCurrency(inv.currentPrice * inv.totalUnits)}`).join('\n');
+                    aiText = `Berikut adalah ulasan portofolio investasimu saat ini:
+
+${invList}
+
+*   **Total Nilai Portofolio:** ${formatCurrency(totalVal)}
+*   **Analisis Diversifikasi:** Kamu memiliki ${investments.length} jenis aset investasi. Terus pertahankan investasi rutin bulanan Anda (DCA) agar nilainya berlipat ganda! 📈`;
+                }
+            } else if (query.includes('langganan') || query.includes('subscription') || query.includes('tagihan') || query.includes('biaya rutin')) {
+                const totalSubCost = subscriptions.reduce((sum, s) => sum + s.amount, 0);
+                if (subscriptions.length === 0) {
+                    aiText = `Bagus sekali! Kamu tidak memiliki biaya langganan rutin (seperti Netflix, Spotify, VPS) yang terdaftar di Rplanner. Keuanganmu aman dari bocor alus pengeluaran bulanan otomatis! 🚀`;
+                } else {
+                    const subList = subscriptions.map((s, i) => `${i + 1}. **${s.name}**: ${formatCurrency(s.amount)} / bulan`).join('\n');
+                    aiText = `Berikut adalah daftar biaya langganan bulananmu:
+
+${subList}
+
+*   **Total Biaya Langganan:** ${formatCurrency(totalSubCost)} per bulan
+*   **Rekomendasi AI:** Apakah seluruh layanan di atas masih aktif digunakan? Coba batalkan 1-2 layanan yang jarang kamu buka untuk menghemat pengeluaran bulananmu! 💡`;
+                }
+            } else if (query.includes('goals') || query.includes('target') || query.includes('barang harapan') || query.includes('wishlist')) {
+                if (goals.length === 0) {
+                    aiText = `Kamu belum mendaftarkan sasaran atau Barang Harapan (wishlist) impianmu di Rplanner. 
+
+🎯 **Tips AI:** Menetapkan tujuan pembelian yang spesifik (misal: "Beli Laptop", "Liburan") beserta nominal target dan tanggal tenggat membantu kamu lebih berdisiplin menabung! Silakan buat satu di menu **Barang Harapan**.`;
+                } else {
+                    const goalList = goals.map((g, i) => {
+                        const amt = typeof g.currentAmount === 'string' ? parseFloat(g.currentAmount) || 0 : g.currentAmount;
+                        const pct = g.targetAmount > 0 ? (amt / g.targetAmount) * 100 : 0;
+                        return `${i + 1}. **${g.name}** (Target: ${formatCurrency(g.targetAmount)} | Kumpul: ${formatCurrency(amt)} - *Progress: ${pct.toFixed(1)}%*)`;
+                    }).join('\n');
+                    aiText = `Berikut adalah progres target Barang Harapan kamu:
+
+${goalList}
+
+Tetap konsisten menabung untuk mencapai impianmu! Tiap rupiah yang kamu sisihkan membawa kamu lebih dekat dengan target ini. 💪`;
+                }
+            } else if (query.includes('analisa') || query.includes('kesehatan') || query.includes('rekomendasi') || query.includes('3 poin')) {
+                // Dynamically compile insights based on actual data
                 const now = new Date();
                 const currentMonth = now.getMonth();
                 const currentYear = now.getFullYear();
@@ -62,33 +107,36 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
 
                 const totalSpent = monthlyExpenses.reduce((sum, t) => sum + t.amount, 0);
 
-                // Find safety buffer budget
-                const safetyBufferBudget = budgets.find(b => b.category.includes('Dana Darurat') || b.category.includes('Safety'));
-                const safetyBuffer = safetyBufferBudget?.limit || 18000000;
+                const safetyBufferBudget = budgets.find(b => b.category.toLowerCase().includes('darurat') || b.category.toLowerCase().includes('safety'));
+                const safetyBuffer = safetyBufferBudget?.limit || 5000000;
 
-                // Investasi total
-                const investmentTotal = transactions.filter(t => t.category.toLowerCase().includes('investasi') || t.category.toLowerCase().includes('reksa'))
-                    .reduce((sum, t) => sum + t.amount, 0);
+                const investmentTotal = investments.reduce((sum, inv) => sum + (inv.currentPrice * inv.totalUnits), 0);
 
                 // High category expense
                 const catSpent: Record<string, number> = {};
                 monthlyExpenses.forEach(t => {
                     catSpent[t.category] = (catSpent[t.category] || 0) + t.amount;
                 });
-                const topCategory = Object.entries(catSpent).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Pengeluaran Umum';
+                const topCategory = Object.entries(catSpent).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Lainnya';
+
+                // Find if any budget exceeded
+                const overBudgets = budgets.filter(b => {
+                    const spent = monthlyExpenses.filter(t => t.category === b.category).reduce((sum, t) => sum + t.amount, 0);
+                    return spent > b.limit;
+                });
 
                 aiText = `Berikut adalah hasil analisis kesehatan finansialmu saat ini:
 
-*3 Hal yang Udah Bagus Banget:*
-1. **Dana Darurat Terjaga**: Kamu memiliki target Safety Buffer sebesar ${formatCurrency(safetyBuffer)}. Total saldo saat ini adalah ${formatCurrency(balance)}. Sangat penting untuk mempertahankan dana darurat ini! 🚀
-2. **Investasi Aktif**: Tercatat total alokasi dana investasi/reksa dana sebesar ${formatCurrency(investmentTotal > 0 ? investmentTotal : 1044000)}. Ini adalah kebiasaan yang sangat bagus untuk jangka panjang. 📈
-3. **Pencatatan Rutin**: Kamu aktif mencatat pengeluaran harian, membantu meminimalisir bocor alus keuangan. 🥰
+*3 Hal yang Sudah Bagus:*
+1. **Target Dana Darurat**: Kamu menetapkan target buffer sebesar ${formatCurrency(safetyBuffer)}. Memiliki target dana darurat sangat penting untuk ketahanan keuangan! 🛡️
+2. **Aset Portofolio**: Tercatat kamu mengelola portofolio investasi senilai ${formatCurrency(investmentTotal)}. Pertahankan untuk masa depan jangka panjang! 📈
+3. **Pencatatan Mandiri**: Riwayat transaksimu terdaftar dengan rapi (${transactions.length} transaksi tercatat).
 
-*3 Hal yang Perlu Ditingkatkan:*
-1. **Pengeluaran Terbesar**: Kategori **${topCategory}** memakan porsi terbesar dari anggaranmu bulan ini (${formatCurrency(totalSpent > 0 ? totalSpent : 2161500)}). Coba hemat di pos ini. ⚠️
-2. **Batas Anggaran**: Periksa kembali kategori kebutuhan agar total pengeluaran bulanan tidak melampaui batas alokasi.
-3. **Konsistensi Menabung**: Sisihkan di awal bulan (pay yourself first) minimal 10% dari penghasilan secara konsisten.`;
-            } else if (query.includes('tips') || query.includes('saran') || query.includes('investasi')) {
+*3 Rekomendasi Perbaikan:*
+1. **Pos Pengeluaran Tertinggi**: Pos **${topCategory}** memakan pengeluaran terbesar kamu bulan ini (${formatCurrency(totalSpent)}). Coba kendalikan di minggu-minggu berikutnya. ⚠️
+2. **Kepatuhan Anggaran**: ${overBudgets.length > 0 ? `Kategori **${overBudgets.map(b => b.category).join(', ')}** telah melampaui batas anggaran!` : 'Semua anggaran bulananmu saat ini masih dalam batas aman (belum ada yang bocor). Pertahankan!'}
+3. **Penghematan Rutin**: Evaluasi total biaya langganan bulananmu sebesar ${formatCurrency(subscriptions.reduce((sum, s) => sum + s.amount, 0))} agar tidak mengganggu pos tabungan.`;
+            } else if (query.includes('tips') || query.includes('saran')) {
                 aiText = `Berikut adalah tips praktis pengelolaan keuangan dari AI Advisor:
 
 1. **Aturan 50/30/20**: Alokasikan 50% untuk kebutuhan pokok (Needs), 30% untuk keinginan (Wants), dan 20% untuk tabungan/investasi (Savings).
@@ -97,7 +145,11 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
             } else {
                 aiText = `Halo! Saya AI Advisor Rplanner. Pertanyaanmu tentang "${text}" sangat menarik. 
 
-Secara umum, pastikan total pengeluaranmu bulan ini berada di bawah batas anggaran bulanan. Jika butuh analisis lengkap, ketik "Analisa kesehatan finansial" untuk mendapatkan laporan 3 poin bagus dan 3 poin perbaikan! 💡`;
+Untuk membantu kamu dengan data riil dari databasemu, kamu bisa mencoba mengetik:
+*   "**Analisa kesehatan finansial**" - Untuk melihat 3 poin bagus dan rekomendasi keuanganmu.
+*   "**Cek investasi**" - Untuk meringkas seluruh aset reksadana, saham, atau crypto milikmu.
+*   "**Cek biaya langganan**" - Untuk melacak berapa pengeluaran rutin bulananmu.
+*   "**Cek barang harapan**" - Untuk memantau progres tabungan barang wishlist impianmu.`;
             }
 
             setMessages(prev => [...prev, {

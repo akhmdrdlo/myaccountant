@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Check, Wallet, ArrowRightLeft, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { TransactionInput } from '../../types';
+import { useFinanceStore } from '../../store/useFinanceStore';
 
 interface TransactionFormProps {
     isOpen: boolean;
@@ -12,63 +13,68 @@ interface TransactionFormProps {
     accounts?: { name: string; balance: number }[];
 }
 
-const EXPENSE_CATEGORIES = [
-    'Makan Weekday', 'Makan Weekend', 'Transport', 'Utilitas', 'Kos (Tabungan)', 'Jajan/Hobi', 'Admin Bank', 'Penyesuaian Saldo'
-];
-
-const INCOME_CATEGORIES = [
-    'Gaji', 'Freelance Project', 'Bunga Bank', 'Refund/Cashback'
-];
-
-const ACCOUNTS = [
-    'Bank BTN (Gaji)', 'Bank BRI (Freelance + Endapan)', 'Seabank (Simpanan)', 'Cash'
-];
-
-// Smart Category Mapping
+// Smart Category Mapping (Default Fallbacks)
 const KEYWORD_MAP: Record<string, string> = {
-    'makan': 'Makan Weekday',
-    'nasi': 'Makan Weekday',
-    'warteg': 'Makan Weekday',
-    'kfc': 'Makan Weekend',
-    'mcd': 'Makan Weekend',
-    'bakso': 'Makan Weekday',
-    'soto': 'Makan Weekday',
-    'gojek': 'Transport',
-    'grab': 'Transport',
-    'bensin': 'Transport',
-    'parkir': 'Transport',
-    'tol': 'Transport',
-    'listrik': 'Utilitas',
-    'air': 'Utilitas',
-    'wifi': 'Utilitas',
-    'pulsa': 'Utilitas',
-    'kopi': 'Jajan/Hobi',
-    'snack': 'Jajan/Hobi',
-    'admin': 'Admin Bank',
-    'transfer': 'Admin Bank', // Potentially admin fee
+    'makan': 'Makanan & Minuman',
+    'nasi': 'Makanan & Minuman',
+    'warteg': 'Makanan & Minuman',
+    'kfc': 'Makanan & Minuman',
+    'mcd': 'Makanan & Minuman',
+    'bakso': 'Makanan & Minuman',
+    'soto': 'Makanan & Minuman',
+    'gojek': 'Transportasi',
+    'grab': 'Transportasi',
+    'bensin': 'Transportasi',
+    'parkir': 'Transportasi',
+    'tol': 'Transportasi',
+    'listrik': 'Tagihan',
+    'air': 'Tagihan',
+    'wifi': 'Tagihan',
+    'pulsa': 'Tagihan',
+    'kopi': 'Belanja',
+    'snack': 'Belanja',
+    'admin': 'Lainnya',
+    'transfer': 'Lainnya',
 };
 
 export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading, accounts = [] }: TransactionFormProps) => {
+    const storeAccounts = useFinanceStore(state => state.accounts);
+    const storeExpenseCategories = useFinanceStore(state => state.expenseCategories);
+    const storeIncomeCategories = useFinanceStore(state => state.incomeCategories);
+
+    const activeAccounts = storeAccounts && storeAccounts.length > 0
+        ? storeAccounts.map(a => a.name)
+        : ['Cash', 'Bank BCA', 'Gopay'];
+
+    const activeExpenseCategories = storeExpenseCategories && storeExpenseCategories.length > 0
+        ? storeExpenseCategories
+        : ['Makanan & Minuman', 'Transportasi', 'Belanja', 'Hiburan', 'Tagihan', 'Lainnya'];
+
+    const activeIncomeCategories = storeIncomeCategories && storeIncomeCategories.length > 0
+        ? storeIncomeCategories
+        : ['Gaji', 'Bonus', 'Freelance', 'Lainnya'];
+
     const [type, setType] = useState<'income' | 'expense' | 'transfer' | 'adjustment'>('expense');
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [account, setAccount] = useState('Cash');
-    const [toAccount, setToAccount] = useState('Bank BTN (Gaji)'); // For Transfer
+    const [toAccount, setToAccount] = useState('Bank BCA'); // For Transfer
 
     // Reset/Prefill form when opened
     useEffect(() => {
         if (isOpen) {
+            const defaultAcc = activeAccounts.includes('Cash') ? 'Cash' : (activeAccounts[0] || 'Cash');
             if (initialData) {
                 setType(initialData.type || 'expense');
                 setCategory(initialData.category || '');
                 setAmount(initialData.amount ? initialData.amount.toString() : '');
                 setDescription(initialData.description || '');
-                setAccount(initialData.account || 'Cash');
-                if (initialData.toAccount) setToAccount(initialData.toAccount);
+                setAccount(initialData.account || defaultAcc);
+                setToAccount(initialData.toAccount || activeAccounts.find(a => a !== (initialData.account || defaultAcc)) || 'Bank BCA');
             } else {
-                // Default reset
-                setAccount('Cash');
+                setAccount(defaultAcc);
+                setToAccount(activeAccounts.find(a => a !== defaultAcc) || 'Bank BCA');
                 setType('expense');
                 setAmount('');
                 setCategory('');
@@ -171,12 +177,21 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                     <h3 className="text-lg font-bold text-gray-800 dark:text-white">
                         {type === 'adjustment' ? 'Penyesuaian Saldo' : 'Catat Transaksi'}
                     </h3>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                    >
-                        <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => alert("Fitur Scan Resi segera hadir! (Coming Soon)")}
+                            className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 rounded-lg font-bold border border-blue-150 dark:border-blue-900/50 hover:bg-blue-100 transition active:scale-95 flex items-center gap-1"
+                        >
+                            📷 Scan Resi
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                        >
+                            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        </button>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5 pb-10">
@@ -230,7 +245,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                             {type === 'income' ? 'Masuk ke Akun' : type === 'adjustment' ? 'Akun yang Disesuaikan' : 'Sumber Dana'}
                         </label>
                         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            {ACCOUNTS.map(acc => (
+                            {activeAccounts.map(acc => (
                                 <button
                                     key={acc}
                                     type="button"
@@ -256,7 +271,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                 Tujuan Transfer
                             </label>
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                {ACCOUNTS.filter(a => a !== account).map(acc => (
+                                {activeAccounts.filter(a => a !== account).map(acc => (
                                     <button
                                         key={acc}
                                         type="button"
@@ -281,7 +296,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         <div>
                             <label className="block text-xs font-medium text-gray-500 mb-2">Kategori</label>
                             <div className="flex flex-wrap gap-2">
-                                {(type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
+                                {(type === 'expense' ? activeExpenseCategories : activeIncomeCategories).map(cat => (
                                     <button
                                         key={cat}
                                         type="button"

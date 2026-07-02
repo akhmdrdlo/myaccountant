@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, Plus, Wallet, Trash2, X, LineChart } from 'lucide-react';
+import { toast } from 'sonner';
+import { TrendingUp, TrendingDown, Plus, Wallet, Trash2, X, LineChart, RefreshCw } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { useGoogleSheets } from '../../hooks/useGoogleSheets';
+import { localDb } from '../../services/localDb';
 import { cn } from '../../lib/utils';
 import type { Investment } from '../../types';
 
@@ -12,6 +14,7 @@ export const InvestmentView = () => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingInv, setEditingInv] = useState<Investment | undefined>(undefined);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Form states
     const [formData, setFormData] = useState<Partial<Investment>>({
@@ -19,7 +22,7 @@ export const InvestmentView = () => {
         name: '',
         symbol: '',
         averagePrice: 0,
-        totalUnits: 0,
+        totalUnits: 1,
         currentPrice: 0,
         color: '#6366f1'
     });
@@ -45,7 +48,7 @@ export const InvestmentView = () => {
                 name: '',
                 symbol: '',
                 averagePrice: 0,
-                totalUnits: 0,
+                totalUnits: 1,
                 currentPrice: 0,
                 color: '#6366f1'
             });
@@ -53,6 +56,70 @@ export const InvestmentView = () => {
         }
         setSyncWithAccount(false);
         setIsFormOpen(true);
+    };
+
+    // Alpha Vantage Price Refresh Handler
+    const handleRefreshPrices = async () => {
+        const metadata = (localDb.loadAllData().metadata || {}) as any;
+        const apiKey = metadata.alphaVantageKey || 'GWST0VV7BWSMK7AB';
+
+        const symbolsToRefresh = investments.filter(inv => inv.symbol && inv.symbol.trim() !== '');
+        if (symbolsToRefresh.length === 0) {
+            toast.error("Tidak ada aset dengan Kode/Simbol saham/crypto yang terdaftar!");
+            return;
+        }
+
+        setRefreshing(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const inv of symbolsToRefresh) {
+            try {
+                const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(inv.symbol!.trim())}&apikey=${apiKey}`);
+                const data = await res.json();
+                
+                if (data.Note) {
+                    console.warn("Alpha Vantage limit warning:", data.Note);
+                    toast.warning("Limit panggilan API Alpha Vantage tercapai. Coba lagi dalam beberapa menit.");
+                    break;
+                }
+
+                const quote = data['Global Quote'];
+                if (quote && quote['05. price']) {
+                    let price = parseFloat(quote['05. price']);
+                    
+                    // If it is a USD asset (no .jk and price < 100000), convert to IDR
+                    if (!inv.symbol!.toLowerCase().endsWith('.jk') && price < 100000) {
+                        price = price * 16000;
+                    }
+
+                    const updatedInv = {
+                        ...inv,
+                        currentPrice: price
+                    };
+
+                    // Update store
+                    useFinanceStore.setState(state => ({
+                        investments: state.investments.map(i => i.id === inv.id ? updatedInv : i)
+                    }));
+
+                    // Update database
+                    await updateInvestment(updatedInv);
+                    successCount++;
+                } else {
+                    console.error("No quote data found for symbol:", inv.symbol);
+                    failCount++;
+                }
+            } catch (err) {
+                console.error("Failed to refresh price for symbol:", inv.symbol, err);
+                failCount++;
+            }
+            // Micro-delay between requests
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        setRefreshing(false);
+        toast.success(`Selesai memperbarui harga!\n\n- Berhasil diperbarui: ${successCount} aset\n- Gagal: ${failCount} aset`);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -63,28 +130,27 @@ export const InvestmentView = () => {
         const invPayload: Investment = {
             id: editingInv?.id || crypto.randomUUID(),
             name: formData.name,
-            symbol: formData.symbol,
+            symbol: formData.symbol || '',
             type: formData.type || 'Lainnya',
             averagePrice: Number(formData.averagePrice) || 0,
-            totalUnits: 1, // UX Simplified: User only enters Total Modal (averagePrice)
+            totalUnits: Number(formData.totalUnits) || 1,
             currentPrice: Number(formData.currentPrice) || 0,
             color: formData.color || '#6366f1'
         };
 
         try {
             if (editingInv) {
-                // Optimistic Local
                 useFinanceStore.setState(state => ({
                     investments: state.investments.map(i => i.id === invPayload.id ? invPayload : i)
                 }));
                 await updateInvestment(invPayload);
+                toast.success(`Aset "${formData.name}" berhasil diperbarui!`);
             } else {
                 useFinanceStore.setState(state => ({
                     investments: [...state.investments, invPayload]
                 }));
                 await addInvestment(invPayload);
 
-                // Check sync
                 if (syncWithAccount) {
                     const totalCostAdded = invPayload.averagePrice * invPayload.totalUnits;
                     const txId = crypto.randomUUID();
@@ -101,11 +167,12 @@ export const InvestmentView = () => {
                     addTransactionOptimistic(tx);
                     await addTransaction(tx);
                 }
+                toast.success(`Aset "${formData.name}" berhasil ditambahkan!`);
             }
             setIsFormOpen(false);
         } catch (error) {
             console.error("Failed to save investment", error);
-            alert("Gagal menyimpan data investasi");
+            toast.error("Gagal menyimpan data investasi");
         } finally {
             setLoading(false);
         }
@@ -136,12 +203,22 @@ export const InvestmentView = () => {
                     <LineChart className="w-6 h-6 text-brimo-primary dark:text-blue-400" />
                     Investasi
                 </h1>
-                <button
-                    onClick={() => handleOpenForm()}
-                    className="flex items-center gap-1 bg-brimo-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                >
-                    <Plus className="w-4 h-4" /> Tambah
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleRefreshPrices}
+                        disabled={refreshing}
+                        className="flex items-center gap-1.5 bg-blue-50 text-blue-650 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-300 dark:hover:bg-blue-900/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-50"
+                    >
+                        <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+                        Refresh Harga
+                    </button>
+                    <button
+                        onClick={() => handleOpenForm()}
+                        className="flex items-center gap-1 bg-brimo-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                    >
+                        <Plus className="w-3.5 h-3.5" /> Tambah
+                    </button>
+                </div>
             </div>
 
             {/* Summary Card */}
@@ -197,7 +274,9 @@ export const InvestmentView = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-gray-800 dark:text-gray-100">{inv.name}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{inv.type}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {inv.type} • {inv.totalUnits} Unit {inv.symbol && `(${inv.symbol.toUpperCase()})`}
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="flex space-x-2">
@@ -209,13 +288,15 @@ export const InvestmentView = () => {
 
                                 <div className="flex justify-between items-end">
                                     <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Nilai Saat Ini</p>
-                                        <p className="font-semibold text-gray-800 dark:text-gray-100">{formatCurrency(invValue)}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 font-sans">Harga Satuan: {formatCurrency(inv.currentPrice)}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Nilai Portofolio</p>
+                                        <p className="font-bold text-gray-800 dark:text-gray-100 text-base">{formatCurrency(invValue)}</p>
                                     </div>
                                     <div className="text-right">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 font-sans">Avg Cost: {formatCurrency(inv.averagePrice)}</p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Return</p>
                                         <p className={cn(
-                                            "text-sm font-semibold flex items-center justify-end gap-1",
+                                            "text-sm font-bold flex items-center justify-end gap-1",
                                             invProfit >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
                                         )}>
                                             {invProfit >= 0 ? '+' : '-'}{formatCurrency(Math.abs(invProfit))}
@@ -279,33 +360,61 @@ export const InvestmentView = () => {
                                             value={formData.symbol}
                                             onChange={e => setFormData({ ...formData, symbol: e.target.value })}
                                             className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
-                                            placeholder="Ex: BBCA (Opsional)"
+                                            placeholder="Ex: BBCA.JK atau BTCUSD"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Modal Investasi</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="col-span-1">
+                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Jumlah Unit</label>
+                                        <input
+                                            required
+                                            type="number"
+                                            step="any"
+                                            value={formData.totalUnits || ''}
+                                            onChange={e => setFormData({ ...formData, totalUnits: Number(e.target.value) })}
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            placeholder="Ex: 10"
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Avg Buy Price</label>
                                         <input
                                             required
                                             type="number"
                                             value={formData.averagePrice || ''}
                                             onChange={e => setFormData({ ...formData, averagePrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
-                                            placeholder="Cth: 100000"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            placeholder="Avg per unit"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nilai Saat Ini</label>
+                                    <div className="col-span-1">
+                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Harga Saat Ini</label>
                                         <input
                                             required
                                             type="number"
                                             value={formData.currentPrice || ''}
                                             onChange={e => setFormData({ ...formData, currentPrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold text-brimo-primary dark:text-blue-400"
-                                            placeholder="Cth: 105000"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold text-brimo-primary dark:text-blue-400"
+                                            placeholder="Per unit"
                                         />
+                                    </div>
+                                </div>
+
+                                {/* Dynamic Preview calculations */}
+                                <div className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                    <div>
+                                        <p className="mb-0.5">Total Modal Beli:</p>
+                                        <p className="text-gray-800 dark:text-gray-200 font-bold text-sm">
+                                            {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="mb-0.5">Total Nilai Sekarang:</p>
+                                        <p className="text-brimo-primary dark:text-blue-400 font-bold text-sm">
+                                            {formatCurrency((formData.currentPrice || 0) * (formData.totalUnits || 0))}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -332,7 +441,7 @@ export const InvestmentView = () => {
                                                     {accounts.map(a => <option key={a.name} value={a.name} className="text-gray-800 bg-white">{a.name}</option>)}
                                                 </select>
                                                 <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
-                                                    <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency(formData.averagePrice || 0)} akan ditambahkan.</span>
+                                                    <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))} akan ditambahkan.</span>
                                                 </p>
                                             </div>
                                         )}

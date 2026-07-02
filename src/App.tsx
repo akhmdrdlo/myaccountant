@@ -19,6 +19,7 @@ import { SpendingProgress } from './components/home/SpendingProgress';
 import { AktivitasKalender } from './components/home/AktivitasKalender';
 import { TransaksiTerbaru } from './components/home/TransaksiTerbaru';
 import type { TransactionInput, Goal, Budget } from './types';
+import { Toaster } from 'sonner';
 
 import { useSubscriptionAutoRecord } from './hooks/useSubscriptionAutoRecord';
 
@@ -44,6 +45,7 @@ function App() {
     budgets,
     setBudgets,
     setSubscriptions,
+    setInvestments,
     addTransactionOptimistic,
     removeTransactionOptimistic,
     setLoading,
@@ -85,11 +87,12 @@ function App() {
         if (result.goals) setGoals(result.goals);
         if (result.budgets) setBudgets(result.budgets);
         if (result.subscriptions) setSubscriptions(result.subscriptions);
+        if (result.investments) setInvestments(result.investments);
       }
       setLoading(false);
     };
     loadData();
-  }, [isAuthenticated, fetchTransactions, setTransactions, setMetadata, setGoals, setBudgets, setSubscriptions, setLoading]);
+  }, [isAuthenticated, fetchTransactions, setTransactions, setMetadata, setGoals, setBudgets, setSubscriptions, setInvestments, setLoading]);
 
   const handleOpenForm = (initial?: Partial<TransactionInput>) => {
     setFormInitialData(initial);
@@ -214,7 +217,12 @@ function App() {
 
 
   if (!isAuthenticated) {
-    return <AuthScreen onSuccess={() => setIsAuthenticated(true)} />;
+    return (
+      <>
+        <Toaster richColors closeButton position="top-center" />
+        <AuthScreen onSuccess={() => setIsAuthenticated(true)} />
+      </>
+    );
   }
 
   // Get Safety Buffer from Budgets (Special Category)
@@ -225,6 +233,7 @@ function App() {
 
   return (
     <Layout activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setCurrentSubview(null); }} onFabClick={() => handleOpenForm()}>
+      <Toaster richColors closeButton position="top-center" />
 
       {/* Home Tab */}
       {activeTab === 'home' && (

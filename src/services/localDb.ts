@@ -55,9 +55,46 @@ export interface LocalData {
 }
 
 export const localDb = {
-    // 1. Sync / Load data locally
+    // 1. Sync / Load data from backend
     async syncWithBackend(): Promise<LocalData> {
+        const username = localStorage.getItem('myaccountant_username');
+        if (username) {
+            try {
+                const res = await fetch(`/api/load-data?username=${encodeURIComponent(username)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.transactions) {
+                        localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(data.transactions));
+                        localStorage.setItem(KEYS.METADATA, JSON.stringify(data.metadata));
+                        localStorage.setItem(KEYS.BUDGETS, JSON.stringify(data.budgets));
+                        localStorage.setItem(KEYS.GOALS, JSON.stringify(data.goals));
+                        localStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(data.subscriptions));
+                        localStorage.setItem(KEYS.INVESTMENTS, JSON.stringify(data.investments));
+                        return data;
+                    }
+                }
+            } catch (err) {
+                console.warn('[localDb] Failed to load data from backend server, falling back to local storage:', err);
+            }
+        }
         return this.loadAllData();
+    },
+
+    async triggerBackendSync() {
+        const username = localStorage.getItem('myaccountant_username');
+        if (!username) return;
+        const data = this.loadAllData();
+        try {
+            await fetch('/api/sync-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, data })
+            });
+        } catch (err) {
+            console.warn('[localDb] Failed to sync data with backend server:', err);
+        }
     },
 
     // 2. Load all data, seed if empty (local fallback)
@@ -103,26 +140,32 @@ export const localDb = {
     // 3. Save individual keys locally
     saveTransactions(txs: Transaction[]) {
         localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(txs));
+        this.triggerBackendSync();
     },
 
     saveMetadata(meta: any) {
         localStorage.setItem(KEYS.METADATA, JSON.stringify(meta));
+        this.triggerBackendSync();
     },
 
     saveBudgets(budgets: Budget[]) {
         localStorage.setItem(KEYS.BUDGETS, JSON.stringify(budgets));
+        this.triggerBackendSync();
     },
 
     saveGoals(goals: Goal[]) {
         localStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
+        this.triggerBackendSync();
     },
 
     saveSubscriptions(subs: Subscription[]) {
         localStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(subs));
+        this.triggerBackendSync();
     },
 
     saveInvestments(invs: Investment[]) {
         localStorage.setItem(KEYS.INVESTMENTS, JSON.stringify(invs));
+        this.triggerBackendSync();
     },
 
     // 3. Export JSON

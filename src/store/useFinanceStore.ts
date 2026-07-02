@@ -3,7 +3,7 @@ import type { Transaction, Goal, Budget, Subscription, Investment } from '../typ
 
 interface FinanceStore {
     transactions: Transaction[];
-    accounts: { name: string; initialBalance: number }[];
+    accounts: { name: string; initialBalance: number; color?: string; icon?: string }[];
     balance: number;
     monthlyIncome: number;
     monthlyExpense: number;
@@ -23,7 +23,7 @@ interface FinanceStore {
     removeTransactionOptimistic: (id: string) => void;
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
-    getAccountBalances: () => { name: string; balance: number; color: string }[];
+    getAccountBalances: () => { name: string; balance: number; color: string; icon?: string }[];
     getSeabankBalance: () => number;
     setGoals: (goals: Goal[]) => void;
     setBudgets: (budgets: Budget[]) => void;
@@ -145,8 +145,9 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
 
         // Map internal account names to display colors
         // Bank BTN (Blue/Yellow), BRI (Blue/Orange), Seabank (Orange), Cash (Purple)
-        const getColor = (name: string) => {
-            const low = name.toLowerCase();
+        const getColor = (acc: { name: string; color?: string }) => {
+            if (acc.color) return acc.color;
+            const low = acc.name.toLowerCase();
             if (low.includes('btn')) return "from-blue-600 to-yellow-500";
             if (low.includes('bri')) return "from-blue-700 to-orange-500";
             if (low.includes('seabank')) return "from-orange-500 to-red-500";
@@ -154,19 +155,26 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
             return "from-gray-700 to-gray-900";
         };
 
-        return accounts.map((acc: { name: string; initialBalance: number }) => {
+        return accounts.map((acc: { name: string; initialBalance: number; color?: string; icon?: string }) => {
             const accIncome = transactions
-                .filter((t: Transaction) => t.account === acc.name && t.type === 'income')
+                .filter((t: Transaction) => 
+                    (t.account === acc.name && t.type === 'income') ||
+                    (t.toAccount === acc.name && t.type === 'transfer')
+                )
                 .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
             const accExpense = transactions
-                .filter((t: Transaction) => t.account === acc.name && t.type === 'expense')
+                .filter((t: Transaction) => 
+                    (t.account === acc.name && t.type === 'expense') ||
+                    (t.account === acc.name && t.type === 'transfer')
+                )
                 .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
             return {
                 name: acc.name,
                 balance: (acc.initialBalance || 0) + accIncome - accExpense,
-                color: getColor(acc.name)
+                color: getColor(acc),
+                icon: acc.icon
             };
         });
     },
@@ -177,11 +185,17 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
         if (!seabankAcc) return 0;
 
         const accIncome = state.transactions
-            .filter((t: Transaction) => t.account === seabankAcc.name && t.type === 'income')
+            .filter((t: Transaction) => 
+                (t.account === seabankAcc.name && t.type === 'income') ||
+                (t.toAccount === seabankAcc.name && t.type === 'transfer')
+            )
             .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
         const accExpense = state.transactions
-            .filter((t: Transaction) => t.account === seabankAcc.name && t.type === 'expense')
+            .filter((t: Transaction) => 
+                (t.account === seabankAcc.name && t.type === 'expense') ||
+                (t.account === seabankAcc.name && t.type === 'transfer')
+            )
             .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
         return (seabankAcc.initialBalance || 0) + accIncome - accExpense;
