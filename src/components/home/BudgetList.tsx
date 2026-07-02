@@ -53,12 +53,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
         return status;
     }, [transactions, budgets]);
 
-    const getProgressColor = (percent: number) => {
-        if (percent >= 100) return "bg-red-500";
-        if (percent >= 90) return "bg-red-400";
-        if (percent >= 75) return "bg-yellow-400";
-        return "bg-blue-400";
-    };
+
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(amount);
@@ -72,31 +67,44 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
             </div>
 
             <div className="space-y-3">
-                {Object.entries(budgetStatus).map(([category, data]) => (
-                    <div key={category} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm transition-colors">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold text-gray-700 dark:text-gray-200">{category}</span>
-                            <span className={cn(
-                                "text-[10px] font-bold",
-                                data.percent > 100 ? "text-red-500" : "text-gray-500"
-                            )}>
-                                {Math.round(data.percent)}%
-                            </span>
-                        </div>
+                {Object.entries(budgetStatus).map(([category, data]) => {
+                    const budgetConfig = budgets.find(b => b.category === category);
+                    const emoji = budgetConfig?.icon || '💵';
+                    const colorClass = budgetConfig?.color || 'bg-blue-500';
 
-                        <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-1.5">
-                            <div
-                                className={cn("h-full rounded-full transition-all", getProgressColor(data.percent))}
-                                style={{ width: `${Math.min(100, data.percent)}%` }}
-                            />
-                        </div>
+                    return (
+                        <div key={category} className="bg-white dark:bg-gray-800 p-3.5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm transition-colors flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-lg shadow-sm flex-shrink-0">
+                                {emoji}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{category}</span>
+                                    <span className={cn(
+                                        "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                                        data.percent > 100 
+                                            ? "bg-red-50 text-red-500 dark:bg-red-950/20" 
+                                            : "bg-gray-50 text-gray-500 dark:bg-gray-700/50"
+                                    )}>
+                                        {Math.round(data.percent)}%
+                                    </span>
+                                </div>
 
-                        <div className="flex justify-between text-[10px] text-gray-400">
-                            <span>Terpakai: Rp {formatCurrency(data.spent)}</span>
-                            <span>Batas: Rp {formatCurrency(data.limit)}</span>
+                                <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-1">
+                                    <div
+                                        className={cn("h-full rounded-full transition-all", data.percent > 100 ? "bg-red-500" : colorClass)}
+                                        style={{ width: `${Math.min(100, data.percent)}%` }}
+                                    />
+                                </div>
+
+                                <div className="flex justify-between text-[9px] text-gray-400">
+                                    <span>Terpakai: Rp {formatCurrency(data.spent)}</span>
+                                    <span>Batas: Rp {formatCurrency(data.limit)}</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

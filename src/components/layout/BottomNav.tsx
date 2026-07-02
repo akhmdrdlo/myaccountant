@@ -1,11 +1,10 @@
-import { Home, FileText, User, PieChart, Plus, TrendingUp } from 'lucide-react';
+import { Home, FileText, User, PieChart, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // Define navigation items
 const NAV_ITEMS = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'mutasi', label: 'Mutasi', icon: FileText }, // History
-    { id: 'investasi', label: 'Investasi', icon: TrendingUp },
     { id: 'analytics', label: 'Analisis', icon: PieChart },
     { id: 'akun', label: 'Akun', icon: User },
 ];
@@ -43,7 +42,6 @@ export const BottomNav = ({ activeTab, onTabChange, onFabClick }: BottomNavProps
                 <div className="flex flex-1 justify-evenly">
                     <NavItem item={NAV_ITEMS[2]} activeTab={activeTab} onTabChange={onTabChange} />
                     <NavItem item={NAV_ITEMS[3]} activeTab={activeTab} onTabChange={onTabChange} />
-                    <NavItem item={NAV_ITEMS[4]} activeTab={activeTab} onTabChange={onTabChange} />
                 </div>
             </div>
         </nav>

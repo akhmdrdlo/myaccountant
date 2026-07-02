@@ -13,35 +13,59 @@ interface BudgetSettingsProps {
 export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }: BudgetSettingsProps) => {
     const [localBudgets, setLocalBudgets] = useState<Budget[]>([]);
 
+    const COLOR_OPTIONS = [
+        { name: 'Biru', value: 'bg-blue-500' },
+        { name: 'Merah', value: 'bg-red-500' },
+        { name: 'Kuning', value: 'bg-yellow-400' },
+        { name: 'Hijau', value: 'bg-green-500' },
+        { name: 'Ungu', value: 'bg-purple-500' },
+        { name: 'Pink', value: 'bg-pink-500' },
+        { name: 'Oranye', value: 'bg-orange-500' },
+        { name: 'Indigo', value: 'bg-indigo-500' }
+    ];
+
+    const EMOJI_OPTIONS = [
+        { emoji: '🍔', label: 'Makan' },
+        { emoji: '🚌', label: 'Transport' },
+        { emoji: '🛍️', label: 'Belanja' },
+        { emoji: '💡', label: 'Utilitas' },
+        { emoji: '🌐', label: 'Internet' },
+        { emoji: '👩', label: 'Keluarga' },
+        { emoji: '📱', label: 'Pulsa' },
+        { emoji: '🏠', label: 'Kost/Rumah' },
+        { emoji: '😭', label: 'Tak Terduga' },
+        { emoji: '🎮', label: 'Hiburan' },
+        { emoji: '💵', label: 'Lainnya' }
+    ];
+
     useEffect(() => {
         if (isOpen) {
-            // Initialize with existing budgets, or 0/default for other categories
-            const initialMap = new Map(budgets.map(b => [b.category, b.limit]));
-
             // Ensure Dana Darurat is in the list
             const extendedCategories = Array.from(new Set(['Dana Darurat (Safety Buffer)', ...categories]));
 
-            const merged: Budget[] = extendedCategories.map(cat => ({
-                category: cat,
-                limit: initialMap.get(cat) || 0
-            }));
+            const merged: Budget[] = extendedCategories.map(cat => {
+                const existing = budgets.find(b => b.category === cat);
+                return {
+                    category: cat,
+                    limit: existing ? existing.limit : 0,
+                    color: existing?.color || 'bg-blue-500',
+                    icon: existing?.icon || '💵'
+                };
+            });
             setLocalBudgets(merged);
         }
     }, [isOpen, budgets, categories]);
 
     if (!isOpen) return null;
 
-    const handleChange = (category: string, value: string) => {
-        const numValue = parseInt(value) || 0;
+    const handleChange = (category: string, field: keyof Budget, value: any) => {
         setLocalBudgets(prev => prev.map(b =>
-            b.category === category ? { ...b, limit: numValue } : b
+            b.category === category ? { ...b, [field]: value } : b
         ));
     };
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        // Filter out 0 limits to save space? Or keep them? Let's keep them explicit or filter.
-        // Filtering might mean "no budget set".
         const toSave = localBudgets.filter(b => b.limit > 0);
         onSave(toSave);
         onClose();
@@ -65,21 +89,51 @@ export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }:
                 </div>
 
                 <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-5">
                         {localBudgets.map((budget) => (
-                            <div key={budget.category} className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                            <div key={budget.category} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 space-y-3">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                     {budget.category}
                                 </label>
+                                
+                                {/* Limit Input */}
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">Rp</span>
                                     <input
                                         type="number"
                                         value={budget.limit || ''}
-                                        onChange={(e) => handleChange(budget.category, e.target.value)}
+                                        onChange={(e) => handleChange(budget.category, 'limit', parseInt(e.target.value) || 0)}
                                         placeholder="0"
                                         className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                     />
+                                </div>
+
+                                {/* Color Picker & Emoji Picker */}
+                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                    <div>
+                                        <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Ikon / Emoji</span>
+                                        <select
+                                            value={budget.icon || '💵'}
+                                            onChange={(e) => handleChange(budget.category, 'icon', e.target.value)}
+                                            className="w-full p-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:outline-none text-gray-800 dark:text-white"
+                                        >
+                                            {EMOJI_OPTIONS.map(opt => (
+                                                <option key={opt.emoji} value={opt.emoji} className="text-gray-800 bg-white">{opt.emoji} {opt.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Tema Warna</span>
+                                        <select
+                                            value={budget.color || 'bg-blue-500'}
+                                            onChange={(e) => handleChange(budget.category, 'color', e.target.value)}
+                                            className="w-full p-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-xs focus:outline-none text-gray-800 dark:text-white"
+                                        >
+                                            {COLOR_OPTIONS.map(opt => (
+                                                <option key={opt.value} value={opt.value} className="text-gray-800 bg-white">{opt.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         ))}

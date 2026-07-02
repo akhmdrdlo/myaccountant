@@ -1,0 +1,166 @@
+@media print {
+    /* Set page orientation to landscape with appropriate margins */
+    @page {
+        size: landscape;
+        margin: 12mm 15mm;
+    }
+
+    /* Reset global elements for printing */
+    body, html {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif !important;
+        font-size: 10px !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Hide standard UI elements like navbars, buttons, inputs, panels, settings, and standard layout */
+    nav,
+    footer,
+    button,
+    input,
+    select,
+    label,
+    .no-print,
+    .fixed,
+    .bottom-nav,
+    .fab-btn,
+    .back-btn,
+    .settings-btn,
+    .quick-actions,
+    .theme-toggle,
+    .search-bar,
+    header,
+    .bg-gradient-to-br,
+    .shadow-xl,
+    .shadow-sm,
+    .rounded-3xl,
+    .rounded-xl {
+        display: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Reset padding/margins for standard layouts */
+    .pb-24, .pt-6, .px-4, .p-5, .p-6, .mb-6, .mb-4 {
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* Print Container formatting - ensure full width */
+    .print-container {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: #ffffff !important;
+    }
+
+    /* Elegant Statement Header (Kop Surat) */
+    .print-header {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+        border-bottom: 2px solid #000000 !important;
+        padding-bottom: 10px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .print-header h1 {
+        font-size: 18px !important;
+        font-weight: 800 !important;
+        margin: 0 0 4px 0 !important;
+        color: #000000 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 2px !important;
+    }
+
+    .print-header p {
+        font-size: 10px !important;
+        color: #374151 !important;
+        margin: 2px 0 !important;
+    }
+
+    /* Formal Table Styles for Landscape Page */
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-top: 15px !important;
+        font-size: 9.5px !important;
+        page-break-inside: auto !important;
+    }
+
+    tr {
+        page-break-inside: avoid !important;
+        page-break-after: auto !important;
+    }
+
+    th {
+        background-color: #f3f4f6 !important;
+        color: #000000 !important;
+        font-weight: bold !important;
+        border: 1px solid #4b5563 !important;
+        padding: 6px 8px !important;
+        text-align: left !important;
+        font-size: 10px !important;
+    }
+
+    td {
+        border: 1px solid #9ca3af !important;
+        padding: 5px 8px !important;
+        color: #000000 !important;
+        word-break: break-word !important;
+    }
+
+    tr:nth-child(even) {
+        background-color: #f9fafb !important;
+    }
+
+    /* Amount Colors Adjustments */
+    .text-green-600, .text-green-500 {
+        color: #065f46 !important; /* Rich Dark Green */
+        font-weight: bold !important;
+    }
+
+    .text-red-600, .text-red-500 {
+        color: #991b1b !important; /* Rich Dark Red */
+        font-weight: bold !important;
+    }
+
+    /* Formal Footer & Signature Block */
+    .print-signature-area {
+        display: flex !important;
+        justify-content: space-between !important;
+        margin-top: 40px !important;
+        page-break-inside: avoid !important;
+    }
+
+    .signature-box {
+        text-align: center !important;
+        width: 220px !important;
+        font-size: 10px !important;
+    }
+
+    .signature-line {
+        margin-top: 55px !important;
+        border-top: 1px solid #000000 !important;
+        width: 100% !important;
+        padding-top: 5px !important;
+        font-weight: bold !important;
+    }
+}
+
+/* Hidden during standard screen browser rendering */
+.print-container {
+    display: none;
+}

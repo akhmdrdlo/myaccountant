@@ -13,9 +13,9 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'myAccountant',
-        short_name: 'myAccountant',
-        description: 'Personal Finance Tracker with Google Sheets Backend',
+        name: 'Rplanner',
+        short_name: 'Rplanner',
+        description: 'Personal Finance Tracker',
         theme_color: '#f97316',
         background_color: '#ffffff',
         display: 'standalone',
@@ -33,5 +33,5 @@ export default defineConfig({
         ]
       }
     })
-  ],
+  ]
 })

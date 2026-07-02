@@ -263,13 +263,13 @@ export const InvestmentView = () => {
                                             onChange={e => setFormData({ ...formData, type: e.target.value })}
                                             className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
                                         >
-                                            <option value="Reksadana">Reksadana</option>
-                                            <option value="Saham">Saham</option>
-                                            <option value="Crypto">Crypto</option>
-                                            <option value="SBN/Obligasi">SBN/Obligasi</option>
-                                            <option value="Emas">Emas</option>
-                                            <option value="Deposito">Deposito</option>
-                                            <option value="Lainnya">Lainnya</option>
+                                            <option value="Reksadana" className="text-gray-800 bg-white">Reksadana</option>
+                                            <option value="Saham" className="text-gray-800 bg-white">Saham</option>
+                                            <option value="Crypto" className="text-gray-800 bg-white">Crypto</option>
+                                            <option value="SBN/Obligasi" className="text-gray-800 bg-white">SBN/Obligasi</option>
+                                            <option value="Emas" className="text-gray-800 bg-white">Emas</option>
+                                            <option value="Deposito" className="text-gray-800 bg-white">Deposito</option>
+                                            <option value="Lainnya" className="text-gray-800 bg-white">Lainnya</option>
                                         </select>
                                     </div>
                                     <div>
@@ -329,7 +329,7 @@ export const InvestmentView = () => {
                                                     onChange={e => setSelectedAccount(e.target.value)}
                                                     className="w-full bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-sm outline-none dark:text-white"
                                                 >
-                                                    {accounts.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+                                                    {accounts.map(a => <option key={a.name} value={a.name} className="text-gray-800 bg-white">{a.name}</option>)}
                                                 </select>
                                                 <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
                                                     <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency(formData.averagePrice || 0)} akan ditambahkan.</span>

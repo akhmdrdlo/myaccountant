@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Wallet, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, Wallet, RefreshCw, Coffee, ShoppingBag, Zap, ArrowLeftRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface BalanceCardProps {
@@ -12,10 +12,10 @@ interface BalanceCardProps {
         bank: number;
     };
     onTransfer?: () => void;
-    onWithdraw?: () => void;
+    onQuickPay?: (category: string, type: 'expense' | 'transfer') => void;
 }
 
-export const BalanceCard = ({ name = "Total Saldo", balance, color = "from-brimo-primary to-brimo-secondary", loading, breakdown, onTransfer, onWithdraw }: BalanceCardProps) => {
+export const BalanceCard = ({ name = "Total Saldo", balance, color = "from-brimo-primary to-brimo-secondary", loading, breakdown, onTransfer, onQuickPay }: BalanceCardProps) => {
     const [visible, setVisible] = useState(false);
 
     // Format currency: IDR
@@ -88,14 +88,47 @@ export const BalanceCard = ({ name = "Total Saldo", balance, color = "from-brimo
                 )}
             </div>
 
-            {/* Actions Bar (Inside Card) */}
-            {(onTransfer || onWithdraw) && (
-                <div className="grid grid-cols-1 gap-3 mt-2">
+            {/* Quick Pays (Only for Main Total Balance Card) */}
+            {(name === "Total Saldo") && (
+                <div className="mt-4 pt-4 border-t border-white/10 bg-black/10 -mx-5 -mb-5 px-5 py-3 grid grid-cols-4 gap-2 text-center">
                     <button
-                        onClick={onTransfer}
-                        className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-xs font-semibold backdrop-blur-sm transition-colors flex items-center justify-center gap-2"
+                        onClick={() => onTransfer && onTransfer()}
+                        className="flex flex-col items-center gap-1 group"
                     >
-                        Transfer / Tarik Tunai
+                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
+                            <ArrowLeftRight className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-[10px] text-white/90 font-medium">Transfer</span>
+                    </button>
+
+                    <button
+                        onClick={() => onQuickPay && onQuickPay('Makan Weekday', 'expense')}
+                        className="flex flex-col items-center gap-1 group"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
+                            <Coffee className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-[10px] text-white/90 font-medium font-sans">Makan</span>
+                    </button>
+
+                    <button
+                        onClick={() => onQuickPay && onQuickPay('Jajan/Hobi', 'expense')}
+                        className="flex flex-col items-center gap-1 group"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
+                            <ShoppingBag className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-[10px] text-white/90 font-medium font-sans">Jajan</span>
+                    </button>
+
+                    <button
+                        onClick={() => onQuickPay && onQuickPay('Utilitas', 'expense')}
+                        className="flex flex-col items-center gap-1 group"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
+                            <Zap className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-[10px] text-white/90 font-medium font-sans">Utilitas</span>
                     </button>
                 </div>
             )}

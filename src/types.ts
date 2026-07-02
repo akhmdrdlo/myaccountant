@@ -50,6 +50,8 @@ export interface Goal {
 export interface Budget {
     category: string;
     limit: number;
+    color?: string;
+    icon?: string;
 }
 
 export interface Subscription {

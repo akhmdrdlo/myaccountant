@@ -1,6 +1,7 @@
 import { Target, AlertTriangle, TrendingUp, ShieldCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, format, parseISO } from 'date-fns';
+import { id } from 'date-fns/locale';
 
 interface GoalCardProps {
     title: string;
@@ -75,7 +76,23 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
                     </div>
                     <div>
                         <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{title}</h4>
-                        {deadline && <p className="text-[10px] text-gray-400">Target: {deadline}</p>}
+                        {deadline && (
+                            <p className="text-[10px] text-gray-400">
+                                Target: {(() => {
+                                    try {
+                                        const parsed = parseISO(deadline);
+                                        if (isNaN(parsed.getTime())) {
+                                            const d = new Date(deadline);
+                                            if (isNaN(d.getTime())) return deadline;
+                                            return format(d, 'd MMMM yyyy', { locale: id });
+                                        }
+                                        return format(parsed, 'd MMMM yyyy', { locale: id });
+                                    } catch (e) {
+                                        return deadline;
+                                    }
+                                })()}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div className="text-right flex flex-col items-end">
