@@ -9,9 +9,7 @@ export const TopBar = () => {
         <header className="w-full flex justify-between items-center py-4 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 transition-colors duration-300">
             {/* Brand Logo / Name */}
             <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brimo-primary to-brimo-secondary flex items-center justify-center shadow-md shadow-blue-200 dark:shadow-none">
-                    <Sparkles className="w-4.5 h-4.5 text-white" />
-                </div>
+                <img src="/banklogo.png" alt="Logo" className="w-12 h-12" />
                 <span className="text-lg font-black tracking-tight text-brimo-primary dark:text-blue-400">
                     Rplanner
                 </span>

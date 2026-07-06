@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'Rplanner',
         short_name: 'Rplanner',
-        description: 'Personal Finance Tracker',
+        description: 'Your Cash, Your Control...',
         theme_color: '#f97316',
         background_color: '#ffffff',
         display: 'standalone',
