@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Moon, Sun, Download, Upload, Database, FileSpreadsheet, LogOut, Sparkles, X, Plus, Trash2 } from 'lucide-react';
+import { Moon, Sun, Download, Upload, Database, FileSpreadsheet, LogOut, Sparkles, X, Plus, Trash2, Camera } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { useThemeStore } from '../../store/useThemeStore';
 import { localDb } from '../../services/localDb';
+import { supabase } from '../../lib/supabase';
+import { useSupabase } from '../../hooks/useSupabase';
 
 export const AccountProfile = () => {
     const { transactions, accounts, expenseCategories, incomeCategories, setMetadata } = useFinanceStore();
     const { theme, toggleTheme } = useThemeStore();
+    const { fetchProfile, updateProfile } = useSupabase();
 
     // Key & Category states
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -16,6 +19,27 @@ export const AccountProfile = () => {
 
     const rawMetadata = (localDb.loadAllData().metadata || { accounts: [], expenseCategories: [], incomeCategories: [] }) as any;
     const [apiKey, setApiKey] = useState(rawMetadata.alphaVantageKey || 'GWST0VV7BWSMK7AB');
+
+    // Profile Edit States
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [updatingProfile, setUpdatingProfile] = useState(false);
+
+    const activeUser = localStorage.getItem('rplanner_username') || 'pengguna';
+
+    // Load profile on mount
+    useEffect(() => {
+        const loadProfile = async () => {
+            const data = await fetchProfile();
+            if (data) {
+                setEmail(data.email || '');
+                setPhone(data.phone || '');
+                setAvatarUrl(data.avatar_url || null);
+            }
+        };
+        loadProfile();
+    }, [fetchProfile]);
 
     const handleSaveApiKey = (key: string) => {
         setApiKey(key);
@@ -139,18 +163,88 @@ export const AccountProfile = () => {
         reader.readAsText(file);
     };
 
+    // Canvas Compression Logic
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Check if size is over 2MB
+        if (file.size > 2 * 1024 * 1024) {
+            toast.error('Ukuran foto melebihi batas 2MB. Silakan gunakan foto yang lebih kecil.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const imgElement = new Image();
+            imgElement.src = event.target?.result as string;
+            imgElement.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 300;
+                const MAX_HEIGHT = 300;
+                let width = imgElement.width;
+                let height = imgElement.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(imgElement, 0, 0, width, height);
+                    // Compress quality to 0.7 JPEG representation
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    setAvatarUrl(compressedBase64);
+                    toast.success('Foto profil berhasil dimuat & dikompresi!');
+                }
+            };
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleSaveProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setUpdatingProfile(true);
+
+        const success = await updateProfile({
+            email: email.trim() || undefined,
+            phone: phone.trim() || undefined,
+            avatar_url: avatarUrl || undefined
+        });
+
+        if (success) {
+            toast.success('Profil berhasil diperbarui!');
+        } else {
+            toast.error('Gagal memperbarui profil.');
+        }
+        setUpdatingProfile(false);
+    };
+
+    const handleLogout = async () => {
+        try {
+            await supabase.auth.signOut();
+        } catch (err) {
+            console.error("Sign out error:", err);
+        }
+        localStorage.removeItem('rplanner_token');
+        localStorage.removeItem('rplanner_username');
+        localStorage.removeItem('rplanner_mode');
+        window.location.reload();
+    };
+
     // Stats
     const totalTransactions = transactions.length;
     const activeAccounts = accounts.length || 3;
-
-    const activeUser = localStorage.getItem('myaccountant_username') || 'pengguna';
-
-    const handleLogout = () => {
-        localStorage.removeItem('myaccountant_token');
-        localStorage.removeItem('myaccountant_username');
-        localStorage.removeItem('myaccountant_mode');
-        window.location.reload();
-    };
 
     return (
         <div className="pb-24 pt-6 px-4 animate-in fade-in duration-200">
@@ -162,14 +256,24 @@ export const AccountProfile = () => {
 
                 <div className="relative z-10 flex flex-col items-center text-center">
                     <div className="relative mb-4 group">
-                        <div className="w-24 h-24 rounded-full p-1 bg-white/20 backdrop-blur-sm">
+                        <div className="w-24 h-24 rounded-full p-1 bg-white/20 backdrop-blur-sm relative overflow-hidden">
                             <img
-                                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(activeUser)}&background=0284c7&color=fff&size=128`}
+                                src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeUser)}&background=0284c7&color=fff&size=128`}
                                 alt="Profile"
                                 className="w-full h-full rounded-full object-cover border-2 border-white shadow-lg"
                             />
                         </div>
-                        <div className="absolute bottom-0 right-0 bg-green-500 w-6 h-6 rounded-full border-4 border-blue-600" />
+                        
+                        {/* Hover Overlay for Camera Upload */}
+                        <label className="absolute bottom-0 right-0 bg-brimo-primary hover:bg-blue-700 text-white w-8 h-8 rounded-full border-2 border-white shadow-md flex items-center justify-center cursor-pointer transition active:scale-90">
+                            <Camera className="w-4.5 h-4.5" />
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                className="hidden"
+                            />
+                        </label>
                     </div>
 
                     <h2 className="text-xl font-bold mb-1 capitalize">{activeUser}</h2>
@@ -193,6 +297,46 @@ export const AccountProfile = () => {
 
             {/* Content List */}
             <div className="space-y-4">
+                {/* Edit Profil Card */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
+                        👤 Informasi Profil
+                    </h3>
+                    <form onSubmit={handleSaveProfile} className="space-y-4">
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mb-1 block">Email (Opsional)</label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="Masukkan email..."
+                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brimo-primary dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mb-1 block">No. Telepon (Opsional)</label>
+                            <input
+                                type="tel"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                placeholder="Masukkan no. telepon..."
+                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brimo-primary dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={updatingProfile}
+                            className="w-full py-2.5 bg-brimo-primary hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-xl shadow-sm text-xs transition active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            {updatingProfile ? (
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                'Simpan Perubahan'
+                            )}
+                        </button>
+                    </form>
+                </div>
+
                 {/* Theme Toggle */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center transition-colors">
                     <div className="flex items-center gap-3">

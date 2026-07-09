@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Check, Wallet, ArrowRightLeft, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { toast } from 'sonner';
 import type { TransactionInput } from '../../types';
 import { useFinanceStore } from '../../store/useFinanceStore';
 
@@ -180,7 +181,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => alert("Fitur Scan Resi segera hadir! (Coming Soon)")}
+                            onClick={() => toast.warning("Fitur Scan Resi segera hadir! (Coming Soon)")}
                             className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 rounded-lg font-bold border border-blue-150 dark:border-blue-900/50 hover:bg-blue-100 transition active:scale-95 flex items-center gap-1"
                         >
                             📷 Scan Resi

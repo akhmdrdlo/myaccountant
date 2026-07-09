@@ -1,4 +1,4 @@
-import { Sun, Moon, Sparkles } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { useThemeStore } from '../../store/useThemeStore';
 
 export const TopBar = () => {

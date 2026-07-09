@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useFinanceStore } from '../store/useFinanceStore';
-import { useGoogleSheets } from '../hooks/useGoogleSheets';
+import { useSupabase } from './useSupabase';
 import type { TransactionInput } from '../types';
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -13,7 +13,7 @@ const CATEGORY_MAP: Record<string, string> = {
 
 export const useSubscriptionAutoRecord = () => {
     const { subscriptions, transactions, loading } = useFinanceStore();
-    const { addTransaction } = useGoogleSheets();
+    const { addTransaction } = useSupabase();
 
     useEffect(() => {
         if (loading || subscriptions.length === 0 || transactions.length === 0) return;

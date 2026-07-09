@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { CreditCard, Plus, Trash2, X } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { useGoogleSheets } from '../../hooks/useGoogleSheets';
+import { useSupabase } from '../../hooks/useSupabase';
 import type { Subscription } from '../../types';
 
 export const SubscriptionTracker = () => {
     // 1. Get Data from Store
     const { subscriptions, setSubscriptions } = useFinanceStore();
-    const { addSubscription, deleteSubscription } = useGoogleSheets();
+    const { addSubscription, deleteSubscription } = useSupabase();
 
     // UI State
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);

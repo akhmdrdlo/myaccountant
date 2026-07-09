@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Lock, User, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, User, ArrowRight, ShieldCheck, Mail, Phone } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
 
 interface AuthScreenProps {
     onSuccess: (username: string) => void;
@@ -10,6 +11,8 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [emailInput, setEmailInput] = useState('');
+    const [phoneInput, setPhoneInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -17,8 +20,10 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
         e.preventDefault();
         setError(null);
 
+        const cleanUsername = username.trim();
+
         // Basic Validations
-        if (username.trim().length < 3) {
+        if (cleanUsername.length < 3) {
             setError('Username minimal 3 karakter.');
             return;
         }
@@ -29,43 +34,114 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
         setLoading(true);
 
-        // Simulate a tiny delay for high-end feel
-        await new Promise(resolve => setTimeout(resolve, 300));
+        try {
+            // Main auth identifier
+            const primaryEmail = `${cleanUsername.toLowerCase()}@rplanner.com`;
 
-        const normalizedUser = username.trim().toLowerCase();
-        const localUsersJson = localStorage.getItem('myaccountant_local_users');
-        const localUsers: Record<string, string> = localUsersJson ? JSON.parse(localUsersJson) : {};
+            if (isLogin) {
+                const { data, error: authError } = await supabase.auth.signInWithPassword({
+                    email: primaryEmail,
+                    password
+                });
 
-        if (isLogin) {
-            if (!localUsers[normalizedUser]) {
-                setError('Akun tidak ditemukan. Silakan daftar terlebih dahulu.');
-                setLoading(false);
-                return;
+                if (authError) {
+                    setError('Gagal masuk. Periksa kembali username dan kata sandi Anda.');
+                    setLoading(false);
+                    return;
+                }
+
+                // Retrieve display name from profiles if exists, fallback to display name from auth
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('username')
+                    .eq('id', data.user?.id)
+                    .single();
+
+                localStorage.setItem('rplanner_token', data.session?.access_token || 'supabase_token');
+                localStorage.setItem('rplanner_username', profile?.username || data.user?.user_metadata?.display_name || cleanUsername);
+                localStorage.setItem('rplanner_mode', 'online');
+            } else {
+                // SIGN UP FLOW
+
+                // 1. Check duplicate username first in 'profiles'
+                const { data: existingProfiles, error: profileCheckError } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('username', cleanUsername.toLowerCase());
+
+                if (profileCheckError) {
+                    setError('Gagal memvalidasi username. Silakan coba lagi.');
+                    setLoading(false);
+                    return;
+                }
+
+                if (existingProfiles && existingProfiles.length > 0) {
+                    setError('Username sudah terdaftar. Silakan pilih username lain.');
+                    setLoading(false);
+                    return;
+                }
+
+                // 2. Call Supabase Sign Up
+                const { data, error: authError } = await supabase.auth.signUp({
+                    email: primaryEmail,
+                    password,
+                    options: {
+                        data: {
+                            display_name: cleanUsername
+                        }
+                    }
+                });
+
+                if (authError) {
+                    setError(authError.message || 'Gagal mendaftar akun baru.');
+                    setLoading(false);
+                    return;
+                }
+
+                // 3. Create profile entry if user creation was successful
+                if (data.user) {
+                    const { error: profileInsertError } = await supabase
+                        .from('profiles')
+                        .insert([
+                            {
+                                id: data.user.id,
+                                username: cleanUsername.toLowerCase(),
+                                email: emailInput.trim() || null,
+                                phone: phoneInput.trim() || null,
+                                avatar_url: null
+                            }
+                        ]);
+
+                    if (profileInsertError) {
+                        console.error("Failed to insert profile record:", profileInsertError);
+                    }
+
+                    if (data.session) {
+                        localStorage.setItem('rplanner_token', data.session.access_token);
+                        localStorage.setItem('rplanner_username', cleanUsername);
+                        localStorage.setItem('rplanner_mode', 'online');
+                    } else {
+                        setError('Pendaftaran berhasil! Silakan hubungi admin atau coba login.');
+                        setLoading(false);
+                        return;
+                    }
+                } else {
+                    setError('Pendaftaran gagal. User tidak terbuat.');
+                    setLoading(false);
+                    return;
+                }
             }
-            if (localUsers[normalizedUser] !== password) {
-                setError('Kata sandi salah.');
-                setLoading(false);
-                return;
-            }
-        } else {
-            if (localUsers[normalizedUser]) {
-                setError('Username sudah terdaftar.');
-                setLoading(false);
-                return;
-            }
-            localUsers[normalizedUser] = password;
-            localStorage.setItem('myaccountant_local_users', JSON.stringify(localUsers));
+
+            setUsername('');
+            setPassword('');
+            setEmailInput('');
+            setPhoneInput('');
+            setLoading(false);
+            onSuccess(cleanUsername);
+        } catch (err: any) {
+            setError(err.message || 'Terjadi kesalahan sistem.');
+            setLoading(false);
         }
-
-        // Success: Login in local/offline mode
-        localStorage.setItem('myaccountant_token', 'local_offline_token');
-        localStorage.setItem('myaccountant_username', username.trim());
-        localStorage.setItem('myaccountant_mode', 'offline');
-
-        setUsername('');
-        setPassword('');
-        setLoading(false);
-        onSuccess(username.trim());
     };
 
     return (
@@ -149,6 +225,39 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                                 />
                             </div>
                         </div>
+
+                        {/* Optional Email (Only for SignUp) */}
+                        {!isLogin && (
+                            <>
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-gray-600 dark:text-gray-400 mb-1 block">Email (Opsional)</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="email"
+                                            value={emailInput}
+                                            onChange={(e) => setEmailInput(e.target.value)}
+                                            placeholder="contoh@domain.com"
+                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brimo-primary dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-gray-600 dark:text-gray-400 mb-1 block">No. Telepon (Opsional)</label>
+                                    <div className="relative">
+                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="tel"
+                                            value={phoneInput}
+                                            onChange={(e) => setPhoneInput(e.target.value)}
+                                            placeholder="0812xxxxxx"
+                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-brimo-primary dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {/* Submit Button */}
                         <button

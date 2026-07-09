@@ -10,34 +10,34 @@ import {
 
 const KEYS = {
     get TRANSACTIONS() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_transactions` : 'myaccountant_transactions';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_transactions` : 'rplanner_transactions';
     },
     get METADATA() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_metadata` : 'myaccountant_metadata';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_metadata` : 'rplanner_metadata';
     },
     get BUDGETS() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_budgets` : 'myaccountant_budgets';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_budgets` : 'rplanner_budgets';
     },
     get GOALS() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_goals` : 'myaccountant_goals';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_goals` : 'rplanner_goals';
     },
     get SUBSCRIPTIONS() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_subscriptions` : 'myaccountant_subscriptions';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_subscriptions` : 'rplanner_subscriptions';
     },
     get INVESTMENTS() {
-        const username = localStorage.getItem('myaccountant_username') || 'default';
-        const mode = localStorage.getItem('myaccountant_mode');
-        return mode === 'offline' ? `myaccountant_${username}_investments` : 'myaccountant_investments';
+        const username = localStorage.getItem('rplanner_username') || 'default';
+        const mode = localStorage.getItem('rplanner_mode');
+        return mode === 'offline' ? `rplanner_${username}_investments` : 'rplanner_investments';
     }
 };
 
@@ -57,7 +57,7 @@ export interface LocalData {
 export const localDb = {
     // 1. Sync / Load data from backend
     async syncWithBackend(): Promise<LocalData> {
-        const username = localStorage.getItem('myaccountant_username');
+        const username = localStorage.getItem('rplanner_username');
         if (username) {
             try {
                 const res = await fetch(`/api/load-data?username=${encodeURIComponent(username)}`);
@@ -81,7 +81,7 @@ export const localDb = {
     },
 
     async triggerBackendSync() {
-        const username = localStorage.getItem('myaccountant_username');
+        const username = localStorage.getItem('rplanner_username');
         if (!username) return;
         const data = this.loadAllData();
         try {

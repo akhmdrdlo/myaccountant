@@ -12,14 +12,15 @@ import { InvestmentView } from './components/home/InvestmentView';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { GoalForm } from './components/home/GoalForm';
 import { BudgetSettings } from './components/home/BudgetSettings';
-import { useGoogleSheets } from './hooks/useGoogleSheets';
+import { useSupabase } from './hooks/useSupabase';
+import { supabase } from './lib/supabase';
 import { useFinanceStore } from './store/useFinanceStore';
 import { useThemeStore } from './store/useThemeStore'; // Init Theme
 import { SpendingProgress } from './components/home/SpendingProgress';
 import { AktivitasKalender } from './components/home/AktivitasKalender';
 import { TransaksiTerbaru } from './components/home/TransaksiTerbaru';
 import type { TransactionInput, Goal, Budget } from './types';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 
 import { useSubscriptionAutoRecord } from './hooks/useSubscriptionAutoRecord';
 
@@ -29,13 +30,13 @@ import { DompetView } from './components/home/DompetView';
 import { KebutuhanView } from './components/home/KebutuhanView';
 import { TipsView } from './components/home/TipsView';
 import { DeadlinesView } from './components/home/DeadlinesView';
-import { TrendingUp, Sliders, Wallet, Sparkles, Target, Lightbulb, Calendar, PieChart, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Sliders, Wallet, Sparkles, Target, Lightbulb, Calendar, PieChart, ArrowLeft, Scan, Camera } from 'lucide-react';
 
 function App() {
   // Auto Record Subscriptions
   useSubscriptionAutoRecord();
 
-  const { fetchTransactions, addTransaction, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useGoogleSheets();
+  const { fetchTransactions, addTransaction, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useSupabase();
   const {
     transactions,
     setTransactions,
@@ -68,8 +69,29 @@ function App() {
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('myaccountant_token');
+    return !!localStorage.getItem('rplanner_token');
   });
+
+  // Listen to Supabase Auth State changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        localStorage.setItem('rplanner_token', session.access_token);
+        localStorage.setItem('rplanner_username', session.user?.user_metadata?.display_name || session.user?.email?.split('@')[0] || 'User');
+        localStorage.setItem('rplanner_mode', 'online');
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('rplanner_token');
+        localStorage.removeItem('rplanner_username');
+        localStorage.removeItem('rplanner_mode');
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -141,7 +163,7 @@ function App() {
         console.error("Transfer failed", err);
         removeTransactionOptimistic(tempId1);
         removeTransactionOptimistic(tempId2);
-        alert("Gagal melakukan transfer.");
+        toast.error("Gagal melakukan transfer.");
         return false;
       }
     }
@@ -176,7 +198,7 @@ function App() {
       console.error("Failed to add transaction", err);
       // Rollback
       removeTransactionOptimistic(tempId);
-      alert("Gagal menyimpan transaksi. Cek koneksi internet.");
+      toast.error("Gagal menyimpan transaksi. Cek koneksi internet.");
       return false;
     }
   };
@@ -321,6 +343,35 @@ function App() {
                 handleOpenForm({ category, type });
               }}
             />
+
+            {/* Scan Resi Banner */}
+            <div className="px-1 mb-6">
+              <div 
+                onClick={() => toast.warning("Fitur Pindai Resi (Scan Receipt) sedang dikembangkan! (Still in Development)")}
+                className="relative overflow-hidden bg-gradient-to-r from-blue-600/10 to-indigo-600/10 dark:from-blue-500/5 dark:to-indigo-500/5 border border-blue-100/50 dark:border-blue-900/30 rounded-3xl p-5 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-300 group"
+              >
+                {/* Decorative background glow */}
+                <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-500" />
+                
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-800 dark:text-white text-sm flex items-center gap-1.5">
+                        Pindai Resi / Struk Belanja
+                        <span className="text-[9px] bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-full">AI</span>
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Catat pengeluaran otomatis menggunakan kamera HP Anda</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:text-blue-500 shadow-sm transition">
+                    <Scan className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Dashboard Menu Grid */}
             <div className="px-1 mb-8">

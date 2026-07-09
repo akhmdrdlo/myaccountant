@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { TrendingUp, TrendingDown, Plus, Wallet, Trash2, X, LineChart, RefreshCw } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { useGoogleSheets } from '../../hooks/useGoogleSheets';
+import { useSupabase } from '../../hooks/useSupabase';
 import { localDb } from '../../services/localDb';
 import { cn } from '../../lib/utils';
 import type { Investment } from '../../types';
 
 export const InvestmentView = () => {
     const { investments, getInvestmentTotal, addTransactionOptimistic } = useFinanceStore();
-    const { addInvestment, updateInvestment, deleteInvestment, addTransaction } = useGoogleSheets();
+    const { addInvestment, updateInvestment, deleteInvestment, addTransaction } = useSupabase();
 
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingInv, setEditingInv] = useState<Investment | undefined>(undefined);

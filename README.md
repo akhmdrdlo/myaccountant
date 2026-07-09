@@ -1,8 +1,8 @@
-# 💰 myAccountant
+# 💰 Rplanner
 
 A modern, privacy-focused Personal Finance Tracker that gives you full control over your data.
 
-**myAccountant** allows you to track expenses, income, subscriptions, and financial goals using **Google Sheets as your private backend database.** No 3rd party servers, no hidden fees—just you and your spreadsheet.
+**Rplanner** allows you to track expenses, income, subscriptions, and financial goals using **Supabase as your secure database.** Each user has their own private account and database slice separated by Postgres Row Level Security (RLS).
 
 ## ✨ Key Features
 
@@ -24,34 +24,36 @@ A modern, privacy-focused Personal Finance Tracker that gives you full control o
 - **Visual Insights**: specific breakdowns of where your money goes.
 - **Monthly Reports**: Compare spending against your budget.
 
-### 🔒 Privacy First
-- **PIN Lock**: Simple security layer to keep your dashboard private.
-- **Your Data, Your Control**: All data is stored in **your own Google Sheet**. You have full access and ownership of your raw financial data.
+### 🔒 Security First
+- **Multi-user Separation**: Secure PostgreSQL RLS ensuring users can only read and write their own data.
+- **User Authentication**: Secure Sign-up, Sign-in, and Sign-out using Supabase Auth.
 
 ---
 
 ## 🛠️ Technology Stack
 - **Frontend**: React + TypeScript + Vite
 - **Styling**: Tailwind CSS
+- **Database / Backend**: Supabase (PostgreSQL with RLS)
+- **State Management**: Zustand
 - **Icons**: Lucide React
-- **Integration**: Google Sheets API (v4)
 
 ---
 
 ## 🚀 Getting Started
 
-To run this project locally, you will need your own Google Cloud Console credentials.
-
 ### Prerequisites
 1. Node.js (v18 or later)
-2. A Google Cloud Project with **Google Sheets API** enabled.
+2. A free Supabase Project.
+
+### Database Setup
+Run the SQL script from the implementation plan in your Supabase SQL Editor to create the necessary tables, indexes, and Row Level Security (RLS) policies.
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/my-accountant.git
-   cd my-accountant
+   git clone https://github.com/yourusername/rplanner.git
+   cd rplanner
    ```
 
 2. **Install dependencies**
@@ -60,20 +62,13 @@ To run this project locally, you will need your own Google Cloud Console credent
    ```
 
 3. **Configure Environment Variables**
-   Create a `.env` file in the root directory and add your Google Sheets credentials:
+   Create a `.env` file at the root of the project:
    ```env
-   VITE_GOOGLE_SCRIPT_URL=your_api_key_here
+   VITE_SUPABASE_URL=your-supabase-url
+   VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
    ```
-   > **Note**: Never commit your `.env` file to public repositories!
 
-4. **Run the Application**
+4. **Start the development server**
    ```bash
    npm run dev
    ```
-
-## 📝 Usage Note
-This application requires a specific Google Sheet structure to function correctly. Ensure your spreadsheet has the required tabs (`Transactions`, `Metadata`, etc.) or let the app initialize them for you (functionality pending implementation).
-
-## Developer
-- **Name**: Akhmad Ridlo
-- **Email**: akhmadd432@gmail.com
