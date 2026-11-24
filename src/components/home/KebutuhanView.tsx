@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { inPeriod } from '../../lib/period';
+import { useFinanceStore as usePeriodStore } from '../../store/useFinanceStore';
 import { ArrowLeft, Sliders, HelpCircle, Edit } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Transaction, Budget } from '../../types';
@@ -12,16 +14,12 @@ interface KebutuhanViewProps {
 
 export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }: KebutuhanViewProps) => {
 
+    const period = usePeriodStore(st => st.period);
     const budgetStatus = useMemo(() => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         const expenses = transactions.filter(t => {
-            const date = new Date(t.timestamp);
             return t.type === 'expense' &&
-                date.getMonth() === currentMonth &&
-                date.getFullYear() === currentYear;
+                inPeriod(t.timestamp, period);
         });
 
         const status: Record<string, { spent: number; limit: number; percent: number; color: string; icon: string }> = {};
@@ -46,7 +44,7 @@ export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }:
                 spent: 0,
                 limit: b.limit,
                 percent: 0,
-                color: b.color || 'bg-purple-500', // Default color is purple (per reference)
+                color: b.color || 'bg-blue-500', // Default color is purple (per reference)
                 icon: b.icon || fallbackEmojis[b.category] || '💵'
             };
         });
@@ -66,7 +64,7 @@ export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }:
         });
 
         return status;
-    }, [transactions, budgets]);
+    }, [transactions, budgets, period]);
 
     // Calculate overall budget limits and spent
     const overall = useMemo(() => {
@@ -85,7 +83,7 @@ export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }:
     };
 
     return (
-        <div className="flex flex-col min-h-[80vh] bg-brimo-bg dark:bg-gray-900 transition-colors">
+        <div className="flex flex-col min-h-[80vh] bg-rp-canvas dark:bg-gray-900 transition-colors">
             {/* Header */}
             <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3">
@@ -94,15 +92,15 @@ export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }:
                     </button>
                     <div>
                         <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Sliders className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            <Sliders className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             Kebutuhan Anggaran
                         </h2>
-                        <p className="text-[10px] text-gray-400 font-medium">Batas limit belanja bulanan</p>
+                        <p className="text-xs text-gray-400 font-medium">Batas limit belanja bulanan</p>
                     </div>
                 </div>
                 <button
                     onClick={onOpenSettings}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-xs font-bold rounded-lg border border-purple-100 dark:border-purple-900/50 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-900/50 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
                 >
                     <Edit size={12} />
                     Ubah
@@ -114,12 +112,12 @@ export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }:
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm transition-colors">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Total Penggunaan</span>
-                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{Math.round(overall.percent)}%</span>
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{Math.round(overall.percent)}%</span>
                     </div>
                     {/* Purple bar */}
                     <div className="w-full h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
                         <div
-                            className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500"
                             style={{ width: `${Math.min(100, overall.percent)}%` }}
                         />
                     </div>

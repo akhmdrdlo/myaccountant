@@ -1,12 +1,101 @@
+@import '@fontsource-variable/plus-jakarta-sans';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Token Rplanner — nilai RGB (tanpa koma) agar bisa dipakai dengan opacity Tailwind.
+   Sumber: docs/BRANDKIT.md */
 @layer base {
+  :root {
+    --rp-canvas: 244 247 251;
+    --rp-surface: 255 255 255;
+    --rp-surface-2: 234 242 251;
+    --rp-line: 220 229 240;
+    --rp-navy: 11 60 122;
+    --rp-royal: 31 95 219;
+    --rp-sky: 90 176 228;
+    --rp-mist: 207 232 247;
+    --rp-action: 242 106 27;
+    --rp-action-press: 217 87 13;
+    --rp-in: 19 138 85;
+    --rp-in-soft: 227 245 236;
+    --rp-out: 200 55 45;
+    --rp-out-soft: 251 233 231;
+    --rp-warn: 184 110 0;
+    --rp-warn-soft: 255 243 220;
+    --rp-ink: 15 30 51;
+    --rp-ink-2: 74 91 114;
+    --rp-ink-inverse: 247 250 253;
+    color-scheme: light;
+  }
+
+  .dark {
+    --rp-canvas: 11 18 32;
+    --rp-surface: 18 27 44;
+    --rp-surface-2: 24 36 58;
+    --rp-line: 36 50 74;
+    --rp-navy: 156 196 242;
+    --rp-royal: 110 162 245;
+    --rp-sky: 90 176 228;
+    --rp-mist: 27 49 80;
+    --rp-action: 255 138 61;
+    --rp-action-press: 242 106 27;
+    --rp-in: 60 203 138;
+    --rp-in-soft: 16 41 31;
+    --rp-out: 255 122 110;
+    --rp-out-soft: 46 22 20;
+    --rp-warn: 242 178 76;
+    --rp-warn-soft: 43 33 17;
+    --rp-ink: 234 240 248;
+    --rp-ink-2: 154 170 192;
+    --rp-ink-inverse: 15 30 51;
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply bg-brimo-bg text-gray-800 font-sans transition-colors duration-300;
+    @apply bg-rp-canvas text-rp-ink font-sans antialiased transition-colors duration-200;
   }
-  .dark body {
-    @apply bg-gray-900 text-gray-100;
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-rp-royal ring-offset-2 ring-offset-rp-canvas;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Angka uang: digit sejajar */
+  .rp-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  .rp-card {
+    @apply bg-rp-surface border border-rp-line rounded-2xl shadow-rp-1;
+  }
+
+  .rp-section-title {
+    @apply text-[15px] font-semibold text-rp-ink;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+}
+
+@keyframes rp-sheet {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

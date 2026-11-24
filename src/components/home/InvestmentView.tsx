@@ -24,7 +24,7 @@ export const InvestmentView = () => {
         averagePrice: 0,
         totalUnits: 1,
         currentPrice: 0,
-        color: '#6366f1'
+        color: '#1F5FDB'
     });
 
     const [syncWithAccount, setSyncWithAccount] = useState(false);
@@ -50,7 +50,7 @@ export const InvestmentView = () => {
                 averagePrice: 0,
                 totalUnits: 1,
                 currentPrice: 0,
-                color: '#6366f1'
+                color: '#1F5FDB'
             });
             setEditingInv(undefined);
         }
@@ -135,7 +135,7 @@ export const InvestmentView = () => {
             averagePrice: Number(formData.averagePrice) || 0,
             totalUnits: Number(formData.totalUnits) || 1,
             currentPrice: Number(formData.currentPrice) || 0,
-            color: formData.color || '#6366f1'
+            color: formData.color || '#1F5FDB'
         };
 
         try {
@@ -200,7 +200,7 @@ export const InvestmentView = () => {
         <div className="pb-32 px-4 pt-4 dark:bg-gray-900 min-h-screen">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                    <LineChart className="w-6 h-6 text-brimo-primary dark:text-blue-400" />
+                    <LineChart className="w-6 h-6 text-rp-navy dark:text-blue-400" />
                     Investasi
                 </h1>
                 <div className="flex gap-2">
@@ -214,7 +214,7 @@ export const InvestmentView = () => {
                     </button>
                     <button
                         onClick={() => handleOpenForm()}
-                        className="flex items-center gap-1 bg-brimo-primary hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                        className="flex items-center gap-1 bg-blue-800 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
                     >
                         <Plus className="w-3.5 h-3.5" /> Tambah
                     </button>
@@ -222,24 +222,24 @@ export const InvestmentView = () => {
             </div>
 
             {/* Summary Card */}
-            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl p-5 mb-6 text-white shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 mb-6 text-white shadow-lg relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-20">
                     <LineChart className="w-24 h-24" />
                 </div>
                 <div className="relative z-10">
-                    <p className="text-indigo-100 text-sm font-medium mb-1">Total Nilai Portofolio</p>
+                    <p className="text-blue-100 text-sm font-medium mb-1">Total Nilai Portofolio</p>
                     <h2 className="text-3xl font-bold mb-4">{formatCurrency(totalValue)}</h2>
 
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-indigo-100 text-xs mb-1">Modal Investasi</p>
+                            <p className="text-blue-100 text-xs mb-1">Modal Investasi</p>
                             <p className="font-semibold">{formatCurrency(totalCost)}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-indigo-100 text-xs mb-1">Return Keseluruhan</p>
+                            <p className="text-blue-100 text-xs mb-1">Return Keseluruhan</p>
                             <div className={cn(
                                 "flex items-center gap-1 font-semibold",
-                                totalProfit >= 0 ? "text-emerald-300" : "text-rose-300"
+                                totalProfit >= 0 ? "text-green-300" : "text-red-300"
                             )}>
                                 {totalProfit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                 {formatCurrency(Math.abs(totalProfit))} ({totalProfit >= 0 ? '+' : '-'}{Math.abs(profitPercentage).toFixed(2)}%)
@@ -266,10 +266,10 @@ export const InvestmentView = () => {
                         const invProfit = invValue - invCost;
 
                         return (
-                            <div key={inv.id} onClick={() => handleOpenForm(inv)} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-brimo-primary dark:hover:border-blue-500 transition-colors">
+                            <div key={inv.id} onClick={() => handleOpenForm(inv)} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-rp-navy dark:hover:border-blue-500 transition-colors">
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: inv.color || '#6366f1' }}>
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: inv.color || '#1F5FDB' }}>
                                             {inv.symbol ? inv.symbol.substring(0, 2).toUpperCase() : inv.name.substring(0, 2).toUpperCase()}
                                         </div>
                                         <div>
@@ -297,7 +297,7 @@ export const InvestmentView = () => {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Return</p>
                                         <p className={cn(
                                             "text-sm font-bold flex items-center justify-end gap-1",
-                                            invProfit >= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                                            invProfit >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"
                                         )}>
                                             {invProfit >= 0 ? '+' : '-'}{formatCurrency(Math.abs(invProfit))}
                                         </p>
@@ -331,7 +331,7 @@ export const InvestmentView = () => {
                                         type="text"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
                                         placeholder="Contoh: Reksa Dana Sucorinvest"
                                     />
                                 </div>
@@ -342,7 +342,7 @@ export const InvestmentView = () => {
                                         <select
                                             value={formData.type}
                                             onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
                                         >
                                             <option value="Reksadana" className="text-gray-800 bg-white">Reksadana</option>
                                             <option value="Saham" className="text-gray-800 bg-white">Saham</option>
@@ -359,7 +359,7 @@ export const InvestmentView = () => {
                                             type="text"
                                             value={formData.symbol}
                                             onChange={e => setFormData({ ...formData, symbol: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
                                             placeholder="Ex: BBCA.JK atau BTCUSD"
                                         />
                                     </div>
@@ -374,7 +374,7 @@ export const InvestmentView = () => {
                                             step="any"
                                             value={formData.totalUnits || ''}
                                             onChange={e => setFormData({ ...formData, totalUnits: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
                                             placeholder="Ex: 10"
                                         />
                                     </div>
@@ -385,7 +385,7 @@ export const InvestmentView = () => {
                                             type="number"
                                             value={formData.averagePrice || ''}
                                             onChange={e => setFormData({ ...formData, averagePrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
                                             placeholder="Avg per unit"
                                         />
                                     </div>
@@ -396,7 +396,7 @@ export const InvestmentView = () => {
                                             type="number"
                                             value={formData.currentPrice || ''}
                                             onChange={e => setFormData({ ...formData, currentPrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold text-brimo-primary dark:text-blue-400"
+                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white font-semibold text-rp-navy dark:text-blue-400"
                                             placeholder="Per unit"
                                         />
                                     </div>
@@ -412,7 +412,7 @@ export const InvestmentView = () => {
                                     </div>
                                     <div>
                                         <p className="mb-0.5">Total Nilai Sekarang:</p>
-                                        <p className="text-brimo-primary dark:text-blue-400 font-bold text-sm">
+                                        <p className="text-rp-navy dark:text-blue-400 font-bold text-sm">
                                             {formatCurrency((formData.currentPrice || 0) * (formData.totalUnits || 0))}
                                         </p>
                                     </div>
@@ -425,7 +425,7 @@ export const InvestmentView = () => {
                                                 type="checkbox"
                                                 checked={syncWithAccount}
                                                 onChange={e => setSyncWithAccount(e.target.checked)}
-                                                className="w-4 h-4 text-brimo-primary rounded focus:ring-brimo-primary"
+                                                className="w-4 h-4 text-rp-navy rounded focus:ring-rp-navy"
                                             />
                                             <span className="text-sm font-medium text-blue-900 dark:text-blue-200">Catat Pembelian ke Mutasi Rekening</span>
                                         </label>
@@ -440,7 +440,7 @@ export const InvestmentView = () => {
                                                 >
                                                     {accounts.map(a => <option key={a.name} value={a.name} className="text-gray-800 bg-white">{a.name}</option>)}
                                                 </select>
-                                                <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
                                                     <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))} akan ditambahkan.</span>
                                                 </p>
                                             </div>
@@ -455,7 +455,7 @@ export const InvestmentView = () => {
                                 type="submit"
                                 form="investment-form"
                                 disabled={loading}
-                                className="w-full bg-brimo-primary hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50"
+                                className="w-full bg-blue-800 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50"
                             >
                                 {loading ? 'Menyimpan...' : 'Simpan Investasi'}
                             </button>

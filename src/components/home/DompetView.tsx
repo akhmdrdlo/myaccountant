@@ -1,377 +1,272 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowLeft, Wallet, Plus, CreditCard, Landmark, Banknote, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, Plus, Search, Trash2, X } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { localDb } from '../../services/localDb';
+import { useSupabase } from '../../hooks/useSupabase';
+import { SubviewHeader } from '../layout/SubviewHeader';
+import { InstitutionLogo } from '../common/InstitutionLogo';
+import {
+    INSTITUTIONS, KIND_LABEL, getInstitution, institutionForAccount, isDebtKind,
+    type Institution, type InstitutionKind,
+} from '../../lib/institutions';
+import { cn, formatRupiah } from '../../lib/utils';
 
 interface DompetViewProps {
     onBack: () => void;
     onOpenTransactionForm?: () => void;
+    /** Dipanggil setelah akun berubah supaya data dimuat ulang dari Supabase */
+    onChanged?: () => Promise<void> | void;
 }
 
-const PRESET_GRADIENTS = [
-    { label: 'Blue-Yellow', value: 'from-blue-600 to-yellow-500' },
-    { label: 'Blue-Orange', value: 'from-blue-700 to-orange-500' },
-    { label: 'Orange-Red', value: 'from-orange-500 to-red-500' },
-    { label: 'Purple-Indigo', value: 'from-purple-600 to-indigo-600' },
-    { label: 'Emerald-Teal', value: 'from-emerald-500 to-teal-600' },
-    { label: 'Rose-Red', value: 'from-rose-500 to-red-600' },
-    { label: 'Slate-Dark', value: 'from-slate-700 to-slate-900' },
-];
+type EditTarget = { mode: 'add' } | { mode: 'edit'; name: string };
 
-const PRESET_EMOJIS = ['💵', '💳', '🏦', '📱', '💰', '💼', '🛒', '🏡', '🚗', '🌟'];
+const KIND_ORDER: InstitutionKind[] = ['cash', 'bank', 'ewallet', 'paylater', 'other'];
 
-export const DompetView = ({ onBack }: DompetViewProps) => {
-    const { getAccountBalances, accounts: rawAccounts, setMetadata } = useFinanceStore();
+export const DompetView = ({ onBack, onChanged }: DompetViewProps) => {
+    const { getAccountBalances, accounts: rawAccounts, transactions } = useFinanceStore();
     const accounts = getAccountBalances();
+    const [target, setTarget] = useState<EditTarget | null>(null);
 
-    // Modal States
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-    const [targetAccountName, setTargetAccountName] = useState('');
-    
-    // Form States
-    const [name, setName] = useState('');
-    const [initialBalance, setInitialBalance] = useState<number>(0);
-    const [color, setColor] = useState('from-blue-600 to-yellow-500');
-    const [icon, setIcon] = useState('🏦');
+    const enriched = accounts.map(a => ({ ...a, inst: institutionForAccount(a) }));
+    const assets = enriched.filter(a => !isDebtKind(a.inst.kind));
+    const debts = enriched.filter(a => isDebtKind(a.inst.kind));
+    const totalAssets = assets.reduce((s, a) => s + a.balance, 0);
+    const totalDebts = debts.reduce((s, a) => s + a.balance, 0);
 
-    // Group accounts
-    const isCreditCardOrDebt = (name: string) => {
-        const lower = name.toLowerCase();
-        return lower.includes('paylater') || lower.includes('kredit') || lower.includes('cicilan') || lower.includes('credit') || lower.includes('debt');
-    };
-
-    const saldoTabungan = accounts.filter(acc => !isCreditCardOrDebt(acc.name));
-    const kartuKreditCicilan = accounts.filter(acc => isCreditCardOrDebt(acc.name));
-
-    // Calculate totals
-    const totalSaldo = saldoTabungan.reduce((sum, acc) => sum + acc.balance, 0);
-    const totalKredit = kartuKreditCicilan.reduce((sum, acc) => sum + acc.balance, 0);
-
-    const formatCurrency = (amount: number) => {
-        const isNegative = amount < 0;
-        const absVal = Math.abs(amount);
-        const formatted = new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        }).format(absVal);
-        return isNegative ? `-${formatted}` : formatted;
-    };
-
-    // Helper to get Account Subtype label & icon
-    const getAccountTypeInfo = (acc: any) => {
-        const lower = acc.name.toLowerCase();
-        let label = 'BANK';
-        let defaultIcon = Landmark;
-        let typeColor = 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
-
-        if (lower.includes('cash') || lower.includes('tunai')) {
-            label = 'TUNAI';
-            defaultIcon = Banknote;
-            typeColor = 'text-purple-500 bg-purple-50 dark:bg-purple-900/20';
-        } else if (lower.includes('ovo') || lower.includes('gopay') || lower.includes('dana') || lower.includes('shopeepay') || lower.includes('linkaja')) {
-            label = 'E-WALLET';
-            defaultIcon = Wallet;
-            typeColor = 'text-green-500 bg-green-50 dark:bg-green-900/20';
-        } else if (lower.includes('paylater') || lower.includes('kredit')) {
-            label = 'CICILAN';
-            defaultIcon = CreditCard;
-            typeColor = 'text-red-500 bg-red-50 dark:bg-red-900/20';
-        }
-
-        return { label, defaultIcon, color: typeColor };
-    };
-
-    // Open Add Modal
-    const handleOpenAdd = () => {
-        setName('');
-        setInitialBalance(0);
-        setColor('from-blue-600 to-yellow-500');
-        setIcon('🏦');
-        setModalMode('add');
-        setIsModalOpen(true);
-    };
-
-    // Open Edit Modal
-    const handleOpenEdit = (acc: any) => {
-        const rawAcc = rawAccounts.find(r => r.name === acc.name);
-        setName(acc.name);
-        setInitialBalance(rawAcc ? rawAcc.initialBalance : 0);
-        setColor(acc.color || 'from-blue-600 to-yellow-500');
-        setIcon(acc.icon || '🏦');
-        setTargetAccountName(acc.name);
-        setModalMode('edit');
-        setIsModalOpen(true);
-    };
-
-    // Save/Update Dompet
-    const handleSave = () => {
-        if (!name.trim()) return;
-
-        const currentMetadata = {
-            accounts: [...rawAccounts],
-            expenseCategories: useFinanceStore.getState().expenseCategories,
-            incomeCategories: useFinanceStore.getState().incomeCategories
-        };
-
-        if (modalMode === 'add') {
-            // Check duplicate
-            if (rawAccounts.some(acc => acc.name.toLowerCase() === name.trim().toLowerCase())) {
-                toast.error('Nama dompet sudah terdaftar!');
-                return;
-            }
-            currentMetadata.accounts.push({
-                name: name.trim(),
-                initialBalance,
-                color,
-                icon
-            });
-            localDb.saveMetadata(currentMetadata);
-            setMetadata(currentMetadata);
-            setIsModalOpen(false);
-            toast.success(`Dompet "${name.trim()}" berhasil ditambahkan!`);
-        } else {
-            // Update mode
-            currentMetadata.accounts = currentMetadata.accounts.map(acc => {
-                if (acc.name === targetAccountName) {
-                    return {
-                        ...acc,
-                        name: name.trim(),
-                        initialBalance,
-                        color,
-                        icon
-                    };
+    return (
+        <div>
+            <SubviewHeader
+                title="Dompet"
+                subtitle="Kantong, rekening bank, dan e-wallet"
+                onBack={onBack}
+                action={
+                    <button
+                        onClick={() => setTarget({ mode: 'add' })}
+                        className="h-11 px-4 rounded-xl bg-rp-action hover:bg-rp-action-press text-white text-sm font-semibold flex items-center gap-1.5"
+                    >
+                        <Plus className="w-4 h-4" /> Tambah
+                    </button>
                 }
-                return acc;
-            });
-            localDb.saveMetadata(currentMetadata);
-            setMetadata(currentMetadata);
-            setIsModalOpen(false);
-            toast.success(`Dompet "${name.trim()}" berhasil diperbarui!`);
-        }
+            />
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="rp-card p-4">
+                    <p className="text-xs text-rp-ink-2">Total saldo</p>
+                    <p className="text-lg font-bold text-rp-ink rp-num">{formatRupiah(totalAssets)}</p>
+                </div>
+                <div className="rp-card p-4">
+                    <p className="text-xs text-rp-ink-2">Paylater & kartu kredit</p>
+                    <p className={cn('text-lg font-bold rp-num', totalDebts < 0 ? 'text-rp-out' : 'text-rp-ink')}>{formatRupiah(totalDebts)}</p>
+                </div>
+            </div>
+
+            {[{ title: 'Saldo', list: assets }, { title: 'Utang', list: debts }].map(({ title, list }) => list.length > 0 && (
+                <section key={title} className="mb-6">
+                    <h2 className="rp-section-title mb-2">{title}</h2>
+                    <ul className="rp-card divide-y divide-rp-line overflow-hidden">
+                        {list.map(acc => (
+                            <li key={acc.name}>
+                                <button
+                                    onClick={() => setTarget({ mode: 'edit', name: acc.name })}
+                                    className="w-full flex items-center gap-3 p-4 text-left hover:bg-rp-surface-2 transition"
+                                >
+                                    <InstitutionLogo institution={acc.inst} />
+                                    <span className="flex-1 min-w-0">
+                                        <span className="block text-sm font-semibold text-rp-ink truncate">{acc.name}</span>
+                                        <span className="block text-xs text-rp-ink-2">{KIND_LABEL[acc.inst.kind]}</span>
+                                    </span>
+                                    <span className={cn('text-sm font-bold rp-num', acc.balance < 0 ? 'text-rp-out' : 'text-rp-ink')}>
+                                        {formatRupiah(acc.balance)}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ))}
+
+            {accounts.length <= 1 && (
+                <button
+                    onClick={() => setTarget({ mode: 'add' })}
+                    className="w-full rp-card border-dashed p-4 text-left flex items-center gap-3"
+                >
+                    <span className="w-10 h-10 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center"><Plus className="w-5 h-5" /></span>
+                    <span>
+                        <span className="block text-sm font-semibold text-rp-ink">Tambah rekening atau e-wallet</span>
+                        <span className="block text-xs text-rp-ink-2">BCA, BRI, GoPay, DANA, dan lainnya</span>
+                    </span>
+                </button>
+            )}
+
+            {target && (
+                <WalletSheet
+                    target={target}
+                    existing={rawAccounts}
+                    usedCount={target.mode === 'edit' ? transactions.filter(t => t.account === target.name || t.toAccount === target.name).length : 0}
+                    onClose={() => setTarget(null)}
+                    onSaved={async () => {
+                        setTarget(null);
+                        await onChanged?.();
+                    }}
+                />
+            )}
+        </div>
+    );
+};
+
+// ── Sheet tambah / ubah dompet ────────────────────────────────
+
+const WalletSheet = ({ target, existing, usedCount, onClose, onSaved }: {
+    target: EditTarget;
+    existing: { name: string; initialBalance: number; institution?: string }[];
+    usedCount: number;
+    onClose: () => void;
+    onSaved: () => Promise<void>;
+}) => {
+    const { createAccount, updateAccount, deleteAccount } = useSupabase();
+    const current = target.mode === 'edit' ? existing.find(a => a.name === target.name) : undefined;
+
+    const [step, setStep] = useState<'pick' | 'form'>(target.mode === 'add' ? 'pick' : 'form');
+    const [inst, setInst] = useState<Institution>(() => current ? institutionForAccount(current) : getInstitution('cash')!);
+    const [name, setName] = useState(current?.name ?? '');
+    const [balance, setBalance] = useState(current ? String(current.initialBalance) : '');
+    const [query, setQuery] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return INSTITUTIONS.filter(i => !q || i.name.toLowerCase().includes(q) || i.aliases.some(a => a.includes(q)));
+    }, [query]);
+
+    const pick = (i: Institution) => {
+        setInst(i);
+        // Nama default unik: "BCA", lalu "BCA 2" jika sudah ada
+        const base = i.id === 'cash' ? 'Kantong' : i.id === 'other' ? '' : i.name;
+        let candidate = base;
+        let n = 2;
+        while (candidate && existing.some(a => a.name.toLowerCase() === candidate.toLowerCase())) candidate = `${base} ${n++}`;
+        setName(candidate);
+        setStep('form');
     };
 
-    // Delete Dompet
-    const handleDelete = () => {
-        if (!confirm(`Hapus dompet "${targetAccountName}"? Seluruh saldo awal dompet ini akan disesuaikan.`)) return;
+    const save = async () => {
+        const clean = name.trim();
+        if (!clean) return toast.error('Isi nama dompet dulu.');
+        const dup = existing.some(a => a.name.toLowerCase() === clean.toLowerCase() && a.name !== current?.name);
+        if (dup) return toast.error('Nama dompet sudah dipakai.');
+        const payload = { name: clean, initialBalance: Number(balance.replace(/[^0-9-]/g, '')) || 0, institution: inst.id };
 
-        const currentMetadata = {
-            accounts: rawAccounts.filter(acc => acc.name !== targetAccountName),
-            expenseCategories: useFinanceStore.getState().expenseCategories,
-            incomeCategories: useFinanceStore.getState().incomeCategories
-        };
+        setBusy(true);
+        const ok = current ? await updateAccount(current.name, payload) : await createAccount(payload);
+        setBusy(false);
+        if (!ok) return toast.error('Gagal menyimpan dompet. Cek koneksi lalu coba lagi.');
+        toast.success(current ? 'Dompet diperbarui.' : `${clean} ditambahkan.`);
+        await onSaved();
+    };
 
-        localDb.saveMetadata(currentMetadata);
-        setMetadata(currentMetadata);
-        setIsModalOpen(false);
+    const remove = async () => {
+        if (!current) return;
+        if (existing.length <= 1) return toast.error('Minimal harus ada satu dompet.');
+        const msg = usedCount > 0
+            ? `"${current.name}" dipakai di ${usedCount} transaksi. Transaksinya tetap ada tapi tidak lagi masuk saldo dompet mana pun. Hapus?`
+            : `Hapus dompet "${current.name}"?`;
+        if (!window.confirm(msg)) return;
+        setBusy(true);
+        const ok = await deleteAccount(current.name);
+        setBusy(false);
+        if (!ok) return toast.error('Gagal menghapus dompet.');
+        await onSaved();
     };
 
     return (
-        <div className="flex flex-col min-h-[80vh] bg-brimo-bg dark:bg-gray-900 transition-colors animate-in fade-in duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-                        <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        <>
+            <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} />
+            <div role="dialog" aria-modal="true" aria-label={current ? 'Ubah dompet' : 'Tambah dompet'}
+                className="fixed inset-x-0 bottom-0 z-[70] max-w-md mx-auto bg-rp-surface rounded-t-3xl max-h-[88vh] flex flex-col">
+                <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                    {step === 'form' && !current && (
+                        <button onClick={() => setStep('pick')} aria-label="Pilih ulang" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-xl hover:bg-rp-surface-2">
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                    )}
+                    <h2 className="flex-1 text-lg font-bold text-rp-ink">
+                        {current ? 'Ubah dompet' : step === 'pick' ? 'Pilih jenis dompet' : 'Detail dompet'}
+                    </h2>
+                    <button onClick={onClose} aria-label="Tutup" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-xl hover:bg-rp-surface-2">
+                        <X className="w-5 h-5" />
                     </button>
-                    <div>
-                        <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Wallet className="w-5 h-5 text-brimo-primary dark:text-blue-400" />
-                            Dompet
-                        </h2>
-                        <p className="text-[10px] text-gray-400">Atur semua sumber uangmu.</p>
-                    </div>
                 </div>
-                <button
-                    onClick={handleOpenAdd}
-                    className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center transition active:scale-95"
-                >
-                    <Plus size={18} />
-                </button>
-            </div>
 
-            {/* List Body */}
-            <div className="flex-1 p-4 space-y-6">
-                {/* Saldo & Tabungan Section */}
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center px-1">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500">Saldo & Tabungan</span>
-                        <span className="text-xs font-bold text-green-600 dark:text-green-400">{formatCurrency(totalSaldo)}</span>
-                    </div>
-
-                    <div className="space-y-2">
-                        {saldoTabungan.map((acc, index) => {
-                            const { label } = getAccountTypeInfo(acc);
+                {step === 'pick' ? (
+                    <div className="flex-1 overflow-y-auto px-4 pb-6">
+                        <label className="relative block mb-4">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-rp-ink-2" />
+                            <input
+                                autoFocus
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder="Cari bank atau e-wallet"
+                                className="w-full h-11 pl-9 pr-3 rounded-xl bg-rp-canvas border border-rp-line text-sm text-rp-ink placeholder:text-rp-ink-2"
+                            />
+                        </label>
+                        {KIND_ORDER.map(kind => {
+                            const items = filtered.filter(i => i.kind === kind);
+                            if (!items.length) return null;
                             return (
-                                <div 
-                                    key={index} 
-                                    onClick={() => handleOpenEdit(acc)}
-                                    className="flex justify-between items-center p-3.5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-sm cursor-pointer active:scale-[0.99] transition-all"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center relative bg-gradient-to-tr ${acc.color || 'from-blue-600 to-yellow-500'} text-white shadow-sm`}>
-                                            <span className="text-lg">{acc.icon || '🏦'}</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{acc.name}</p>
-                                            <p className="text-[9px] uppercase font-bold text-gray-400">{label}</p>
-                                        </div>
+                                <section key={kind} className="mb-4">
+                                    <h3 className="text-xs font-semibold text-rp-ink-2 mb-2">{KIND_LABEL[kind]}</h3>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {items.map(i => (
+                                            <button key={i.id} onClick={() => pick(i)}
+                                                className="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-rp-surface-2 active:scale-95 transition">
+                                                <InstitutionLogo institution={i} size="lg" />
+                                                <span className="text-[11px] font-medium text-rp-ink text-center leading-tight line-clamp-2">{i.name}</span>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{formatCurrency(acc.balance)}</span>
-                                </div>
+                                </section>
                             );
                         })}
-                        {saldoTabungan.length === 0 && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 italic text-center py-4">Belum ada akun saldo.</p>
-                        )}
                     </div>
-                </div>
-
-                {/* Kartu Kredit & Cicilan Section */}
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center px-1">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500">Kartu Kredit & Cicilan</span>
-                        <span className="text-xs font-bold text-red-500">{formatCurrency(totalKredit)}</span>
-                    </div>
-
-                    <div className="space-y-2">
-                        {kartuKreditCicilan.map((acc, index) => {
-                            const { label } = getAccountTypeInfo(acc);
-                            return (
-                                <div 
-                                    key={index} 
-                                    onClick={() => handleOpenEdit(acc)}
-                                    className="flex justify-between items-center p-3.5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-sm cursor-pointer active:scale-[0.99] transition-all"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center relative bg-gradient-to-tr ${acc.color || 'from-red-500 to-rose-600'} text-white shadow-sm`}>
-                                            <span className="text-lg">{acc.icon || '💳'}</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{acc.name}</p>
-                                            <p className="text-[9px] uppercase font-bold text-gray-400">{label}</p>
-                                        </div>
-                                    </div>
-                                    <span className="text-sm font-bold text-red-500">{formatCurrency(acc.balance)}</span>
-                                </div>
-                            );
-                        })}
-                        {kartuKreditCicilan.length === 0 && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 italic text-center py-4">Tidak ada kartu kredit atau cicilan.</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Tambah / Edit Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-                    <div className="bg-white dark:bg-gray-900 w-full max-w-[95%] sm:max-w-md rounded-2xl max-h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95">
-                        <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
-                            <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">
-                                {modalMode === 'add' ? 'Tambah Dompet Baru' : 'Edit Dompet'}
-                            </h3>
-                            <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="p-4 overflow-y-auto space-y-4">
-                            {/* Card Theme Preview */}
-                            <div className={`w-full rounded-2xl p-4 text-white bg-gradient-to-tr ${color} shadow-md flex justify-between items-center transition-all duration-300`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">
-                                        {icon}
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold tracking-wide">{name || 'Nama Dompet'}</p>
-                                        <p className="text-[10px] text-white/80">Saldo Awal Terdaftar</p>
-                                    </div>
-                                </div>
-                                <span className="text-base font-bold">{formatCurrency(initialBalance)}</span>
+                ) : (
+                    <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
+                        <button onClick={() => setStep('pick')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-rp-canvas border border-rp-line text-left">
+                            <InstitutionLogo institution={inst} />
+                            <span className="flex-1">
+                                <span className="block text-sm font-semibold text-rp-ink">{inst.name}</span>
+                                <span className="block text-xs text-rp-ink-2">{KIND_LABEL[inst.kind]} · ketuk untuk ganti</span>
+                            </span>
+                        </button>
+                        <label className="block text-sm font-medium text-rp-ink">
+                            Nama dompet
+                            <input value={name} onChange={e => setName(e.target.value)} placeholder="mis. BCA Gaji, GoPay Harian"
+                                className="mt-1 w-full h-11 px-3 rounded-xl bg-rp-canvas border border-rp-line text-sm text-rp-ink" />
+                        </label>
+                        <label className="block text-sm font-medium text-rp-ink">
+                            {isDebtKind(inst.kind) ? 'Tagihan awal (isi minus, mis. -500000)' : 'Saldo awal'}
+                            <div className="mt-1 relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-rp-ink-2">Rp</span>
+                                <input value={balance} onChange={e => setBalance(e.target.value)} inputMode="numeric" placeholder="0"
+                                    className="w-full h-11 pl-10 pr-3 rounded-xl bg-rp-canvas border border-rp-line text-sm text-rp-ink rp-num" />
                             </div>
+                            <span className="block mt-1 text-xs text-rp-ink-2">Saldo saat dompet mulai dicatat. Transaksi setelahnya dihitung otomatis.</span>
+                        </label>
 
-                            {/* Input Nama */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Nama Rekening / Dompet</label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    placeholder="Contoh: Bank BCA, Cash Wallet, Gopay"
-                                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white"
-                                />
-                            </div>
-
-                            {/* Input Saldo Awal */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Saldo Awal</label>
-                                <input
-                                    type="number"
-                                    value={initialBalance || 0}
-                                    onChange={e => setInitialBalance(Number(e.target.value))}
-                                    placeholder="0"
-                                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brimo-primary dark:text-white font-semibold"
-                                />
-                            </div>
-
-                            {/* Preset Ikon Emoji */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Pilih Ikon</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {PRESET_EMOJIS.map(em => (
-                                        <button
-                                            key={em}
-                                            type="button"
-                                            onClick={() => setIcon(em)}
-                                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition border ${icon === em ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'border-gray-100 dark:border-gray-850 hover:bg-gray-50'}`}
-                                        >
-                                            {em}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Preset Tema Gradien */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Tema Warna Dompet</label>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {PRESET_GRADIENTS.map(grad => (
-                                        <button
-                                            key={grad.value}
-                                            type="button"
-                                            onClick={() => setColor(grad.value)}
-                                            className={`h-8 rounded-lg bg-gradient-to-tr ${grad.value} border-2 ${color === grad.value ? 'border-orange-500 scale-105' : 'border-transparent'} transition`}
-                                            title={grad.label}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer Actions */}
-                        <div className="p-4 border-t border-gray-100 dark:border-gray-800 pb-safe flex gap-2">
-                            {modalMode === 'edit' && (
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-3.5 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 text-red-600 rounded-xl transition flex items-center justify-center"
-                                    title="Hapus Dompet"
-                                >
+                        <div className="flex gap-2 pt-2">
+                            {current && (
+                                <button onClick={remove} disabled={busy} aria-label="Hapus dompet"
+                                    className="h-12 w-12 rounded-xl border border-rp-line text-rp-out flex items-center justify-center disabled:opacity-50">
                                     <Trash2 className="w-5 h-5" />
                                 </button>
                             )}
-                            <button
-                                onClick={handleSave}
-                                className="flex-1 bg-brimo-primary hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition active:scale-95 text-sm"
-                            >
-                                Simpan Dompet
+                            <button onClick={save} disabled={busy}
+                                className="flex-1 h-12 rounded-xl bg-rp-action hover:bg-rp-action-press text-white font-semibold disabled:opacity-60">
+                                {busy ? 'Menyimpan…' : current ? 'Simpan perubahan' : 'Tambah dompet'}
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )}
+            </div>
+        </>
     );
 };

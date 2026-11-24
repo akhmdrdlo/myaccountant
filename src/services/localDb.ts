@@ -55,46 +55,14 @@ export interface LocalData {
 }
 
 export const localDb = {
-    // 1. Sync / Load data from backend
+    // Warisan: dulu menyinkronkan ke server.js tanpa autentikasi (siapa pun bisa membaca data
+    // pengguna lain lewat ?username=). Dihapus demi keamanan; sumber data tunggal sekarang Supabase.
     async syncWithBackend(): Promise<LocalData> {
-        const username = localStorage.getItem('rplanner_username');
-        if (username) {
-            try {
-                const res = await fetch(`/api/load-data?username=${encodeURIComponent(username)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.transactions) {
-                        localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(data.transactions));
-                        localStorage.setItem(KEYS.METADATA, JSON.stringify(data.metadata));
-                        localStorage.setItem(KEYS.BUDGETS, JSON.stringify(data.budgets));
-                        localStorage.setItem(KEYS.GOALS, JSON.stringify(data.goals));
-                        localStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(data.subscriptions));
-                        localStorage.setItem(KEYS.INVESTMENTS, JSON.stringify(data.investments));
-                        return data;
-                    }
-                }
-            } catch (err) {
-                console.warn('[localDb] Failed to load data from backend server, falling back to local storage:', err);
-            }
-        }
         return this.loadAllData();
     },
 
-    async triggerBackendSync() {
-        const username = localStorage.getItem('rplanner_username');
-        if (!username) return;
-        const data = this.loadAllData();
-        try {
-            await fetch('/api/sync-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, data })
-            });
-        } catch (err) {
-            console.warn('[localDb] Failed to sync data with backend server:', err);
-        }
+    triggerBackendSync() {
+        // no-op
     },
 
     // 2. Load all data, seed if empty (local fallback)

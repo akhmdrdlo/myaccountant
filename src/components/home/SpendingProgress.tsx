@@ -1,20 +1,17 @@
 import { useMemo } from 'react';
+import { inPeriod } from '../../lib/period';
 import { useFinanceStore } from '../../store/useFinanceStore';
 
 
 export const SpendingProgress = () => {
     const { transactions, monthlyIncome } = useFinanceStore();
 
+    const period = useFinanceStore(st => st.period);
     const stats = useMemo(() => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         const currentTx = transactions.filter(t => {
-            const date = new Date(t.timestamp);
             return t.type === 'expense' &&
-                date.getMonth() === currentMonth &&
-                date.getFullYear() === currentYear &&
+                inPeriod(t.timestamp, period) &&
                 !['transfer / tarik tunai', 'penyesuaian saldo'].includes(t.category.toLowerCase());
         });
 
@@ -51,7 +48,7 @@ export const SpendingProgress = () => {
             wants, wantsLimit, wantsPct,
             savings: currentSavings, savingsTarget, savingsPct
         };
-    }, [transactions, monthlyIncome]);
+    }, [transactions, monthlyIncome, period]);
 
     const formatCurrency = (val: number) =>
         new Intl.NumberFormat('id-ID', { notation: "compact", maximumFractionDigits: 1 }).format(val);
@@ -68,8 +65,8 @@ export const SpendingProgress = () => {
         return "Perlu Genjot";
     };
 
-    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-    const currentDay = new Date().getDate();
+    const daysInMonth = period.totalDays;
+    const currentDay = period.dayIndex;
     const monthProgress = (currentDay / daysInMonth) * 100;
 
     return (
@@ -102,7 +99,7 @@ export const SpendingProgress = () => {
                                 strokeLinecap="round"
                             />
                         </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-[8px] font-bold text-gray-700 dark:text-gray-300 leading-none">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-[11px] font-bold text-gray-700 dark:text-gray-300 leading-none">
                             <span>HARI</span>
                             <span className="text-sm">{currentDay}</span>
                         </div>
@@ -119,16 +116,16 @@ export const SpendingProgress = () => {
                 {/* Kebutuhan (Needs) - Purple */}
                 <div>
                     <div className="flex justify-between text-xs mb-1">
-                        <span className="font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">KEBUTUHAN (50%)</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">KEBUTUHAN (50%)</span>
                         <span className="text-gray-500 dark:text-gray-400 font-medium">{getStatus(stats.needsPct)} ({Math.round(stats.needsPct)}%)</span>
                     </div>
                     <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-purple-500 rounded-full transition-all duration-1000"
+                            className="h-full bg-blue-500 rounded-full transition-all duration-1000"
                             style={{ width: `${Math.min(100, stats.needsPct)}%` }}
                         />
                     </div>
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
+                    <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                         <span>Terpakai: Rp {formatCurrency(stats.needs)}</span>
                         <span>Limit: Rp {formatCurrency(stats.needsLimit)}</span>
                     </div>
@@ -146,7 +143,7 @@ export const SpendingProgress = () => {
                             style={{ width: `${Math.min(100, stats.wantsPct)}%` }}
                         />
                     </div>
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
+                    <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                         <span>Terpakai: Rp {formatCurrency(stats.wants)}</span>
                         <span>Limit: Rp {formatCurrency(stats.wantsLimit)}</span>
                     </div>
@@ -164,7 +161,7 @@ export const SpendingProgress = () => {
                             style={{ width: `${Math.min(100, stats.savingsPct)}%` }}
                         />
                     </div>
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
+                    <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                         <span>Sisa Saldo: Rp {formatCurrency(stats.savings)}</span>
                         <span>Target: Rp {formatCurrency(stats.savingsTarget)}</span>
                     </div>

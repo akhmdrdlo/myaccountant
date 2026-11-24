@@ -96,7 +96,7 @@ export const AktivitasKalender = ({ transactions }: AktivitasKalenderProps) => {
             <div className="flex justify-between items-center mb-4">
                 <div>
                     <h3 className="text-md font-bold text-gray-800 dark:text-white">Aktivitas Bulan Ini</h3>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider mt-1">
                         {format(currentMonth, 'MMMM yyyy', { locale: id })}
                     </p>
                 </div>
@@ -121,7 +121,7 @@ export const AktivitasKalender = ({ transactions }: AktivitasKalenderProps) => {
                 {/* Day Labels */}
                 <div className="grid grid-cols-7 gap-1 text-center mb-2">
                     {['SN', 'SL', 'RB', 'KM', 'JM', 'SB', 'MG'].map(day => (
-                        <span key={day} className="text-[10px] font-bold text-gray-400 dark:text-gray-500">
+                        <span key={day} className="text-xs font-bold text-gray-400 dark:text-gray-500">
                             {day}
                         </span>
                     ))}
@@ -148,15 +148,15 @@ export const AktivitasKalender = ({ transactions }: AktivitasKalenderProps) => {
                                 className={cn(
                                     "aspect-square rounded-lg p-1 flex flex-col justify-between border relative transition-colors",
                                     isToday 
-                                        ? "border-brimo-primary bg-blue-50/10 dark:bg-blue-900/10" 
+                                        ? "border-rp-navy bg-blue-50/10 dark:bg-blue-900/10" 
                                         : "border-gray-100 dark:border-gray-750 bg-gray-50/40 dark:bg-gray-900/20",
                                     isIncome && "bg-green-50/40 dark:bg-green-950/20 border-green-200 dark:border-green-900/50",
-                                    isExpense && "bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50"
+                                    isExpense && "bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/50"
                                 )}
                             >
                                 <span className={cn(
-                                    "text-[9px] font-bold",
-                                    isToday ? "text-brimo-primary dark:text-blue-400" : "text-gray-400 dark:text-gray-500"
+                                    "text-[11px] font-bold",
+                                    isToday ? "text-rp-navy dark:text-blue-400" : "text-gray-400 dark:text-gray-500"
                                 )}>
                                     {dayNum}
                                 </span>
@@ -164,7 +164,7 @@ export const AktivitasKalender = ({ transactions }: AktivitasKalenderProps) => {
                                     <span
                                         className={cn(
                                             "text-[7.5px] font-bold text-center block leading-none truncate",
-                                            isIncome ? "text-green-600 dark:text-green-400" : "text-rose-500 dark:text-rose-400"
+                                            isIncome ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
                                         )}
                                     >
                                         {formatShortAmount(dailyNet)}

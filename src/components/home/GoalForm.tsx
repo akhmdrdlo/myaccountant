@@ -9,15 +9,18 @@ interface GoalFormProps {
     initialData?: Goal;
     onSubmit: (goal: Goal) => void;
     onDelete?: (id: string) => void; // New prop
-    defaultAmount?: number | string;
+    defaultAmount?: number;
+    /** Nama akun yang bisa ditautkan; saldo akun itu menjadi jumlah terkumpul. */
+    accounts?: string[];
 }
 
-export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, defaultAmount = 0 }: GoalFormProps) => {
+export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, defaultAmount = 0, accounts = [] }: GoalFormProps) => {
     const [name, setName] = useState('');
     const [targetAmount, setTargetAmount] = useState('');
     const [currentAmount, setCurrentAmount] = useState('');
     const [deadline, setDeadline] = useState('');
     const [color, setColor] = useState('bg-blue-500');
+    const [linkedAccount, setLinkedAccount] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -27,12 +30,14 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
                 setCurrentAmount(initialData.currentAmount.toString());
                 setDeadline(initialData.deadline || '');
                 setColor(initialData.color || 'bg-blue-500');
+                setLinkedAccount(initialData.linkedAccount || '');
             } else {
                 setName('');
                 setTargetAmount('');
                 setCurrentAmount(defaultAmount.toString()); // Use default amount if no initial data
                 setDeadline('');
                 setColor('bg-blue-500');
+                setLinkedAccount('');
             }
         }
     }, [isOpen, initialData]);
@@ -41,14 +46,14 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const isFormula = currentAmount.toString().startsWith('=');
         onSubmit({
             id: initialData?.id || crypto.randomUUID(),
             name,
-            targetAmount: Number(targetAmount),
-            currentAmount: isFormula ? currentAmount : Number(currentAmount),
+            targetAmount: Number(targetAmount) || 0,
+            currentAmount: Number(String(currentAmount).replace(/[^0-9]/g, '')) || 0,
             deadline,
-            color
+            color,
+            linkedAccount: linkedAccount || undefined,
         });
         onClose();
     };
@@ -56,9 +61,9 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
     const colors = [
         { name: 'Biru', value: 'bg-blue-500' },
         { name: 'Merah', value: 'bg-red-500' },
-        { name: 'Kuning', value: 'bg-yellow-400' },
+        { name: 'Kuning', value: 'bg-amber-400' },
         { name: 'Hijau', value: 'bg-green-500' },
-        { name: 'Ungu', value: 'bg-purple-500' },
+        { name: 'Ungu', value: 'bg-blue-500' },
     ];
 
     return (
@@ -66,8 +71,8 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
             <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 border border-transparent dark:border-gray-800">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
-                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         </div>
                         <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                             {initialData ? 'Edit Barang Harapan' : 'Tambah Barang Harapan'}
@@ -87,7 +92,7 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Contoh: Laptop Baru"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         />
                     </div>
 
@@ -99,19 +104,34 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
                                 required
                                 value={targetAmount}
                                 onChange={(e) => setTargetAmount(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Terkumpul (Rp / Formula)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Terkumpul (Rp)</label>
                             <input
-                                type="text"
-                                value={currentAmount}
+                                type="number"
+                                inputMode="numeric"
+                                disabled={!!linkedAccount}
+                                value={linkedAccount ? '' : currentAmount}
                                 onChange={(e) => setCurrentAmount(e.target.value)}
-                                placeholder="0 atau =Sheet!A1"
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                placeholder={linkedAccount ? 'Ikut saldo akun' : '0'}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                             />
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tautkan ke akun tabungan (opsional)</label>
+                        <select
+                            value={linkedAccount}
+                            onChange={(e) => setLinkedAccount(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                        >
+                            <option value="">Tidak, isi manual</option>
+                            {accounts.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">Kalau ditautkan, jumlah terkumpul otomatis = saldo akun itu.</p>
                     </div>
 
                     <div>
@@ -120,7 +140,7 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
                             type="date"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         />
                     </div>
 
@@ -145,7 +165,7 @@ export const GoalForm = ({ isOpen, onClose, initialData, onSubmit, onDelete, def
 
                     <button
                         type="submit"
-                        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transition-all active:scale-95 mt-4"
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-rp-2 flex items-center justify-center gap-2 transition-all active:scale-95 mt-4"
                     >
                         <Save className="w-5 h-5" />
                         Simpan Barang

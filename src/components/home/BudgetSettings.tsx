@@ -16,12 +16,12 @@ export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }:
     const COLOR_OPTIONS = [
         { name: 'Biru', value: 'bg-blue-500' },
         { name: 'Merah', value: 'bg-red-500' },
-        { name: 'Kuning', value: 'bg-yellow-400' },
+        { name: 'Kuning', value: 'bg-amber-400' },
         { name: 'Hijau', value: 'bg-green-500' },
-        { name: 'Ungu', value: 'bg-purple-500' },
-        { name: 'Pink', value: 'bg-pink-500' },
+        { name: 'Ungu', value: 'bg-blue-500' },
+        { name: 'Pink', value: 'bg-blue-500' },
         { name: 'Oranye', value: 'bg-orange-500' },
-        { name: 'Indigo', value: 'bg-indigo-500' }
+        { name: 'Indigo', value: 'bg-blue-500' }
     ];
 
     const EMOJI_OPTIONS = [
@@ -111,7 +111,7 @@ export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }:
                                 {/* Color Picker & Emoji Picker */}
                                 <div className="grid grid-cols-2 gap-3 pt-1">
                                     <div>
-                                        <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Ikon / Emoji</span>
+                                        <span className="block text-xs uppercase font-bold text-gray-400 mb-1">Ikon / Emoji</span>
                                         <select
                                             value={budget.icon || '💵'}
                                             onChange={(e) => handleChange(budget.category, 'icon', e.target.value)}
@@ -123,7 +123,7 @@ export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }:
                                         </select>
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Tema Warna</span>
+                                        <span className="block text-xs uppercase font-bold text-gray-400 mb-1">Tema Warna</span>
                                         <select
                                             value={budget.color || 'bg-blue-500'}
                                             onChange={(e) => handleChange(budget.category, 'color', e.target.value)}
@@ -142,7 +142,7 @@ export const BudgetSettings = ({ isOpen, onClose, budgets, categories, onSave }:
                     <div className="pt-4 mt-2 border-t border-gray-100 flex-shrink-0">
                         <button
                             type="submit"
-                            className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 transition-all active:scale-95"
+                            className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-rp-2 flex items-center justify-center gap-2 transition-all active:scale-95"
                         >
                             <Save className="w-5 h-5" />
                             Simpan Budget

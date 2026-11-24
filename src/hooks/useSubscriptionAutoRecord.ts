@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { useSupabase } from './useSupabase';
-import type { TransactionInput } from '../types';
+import { institutionForAccount } from '../lib/institutions';
 
 const CATEGORY_MAP: Record<string, string> = {
     'Internet': 'Utilitas',
@@ -11,57 +11,50 @@ const CATEGORY_MAP: Record<string, string> = {
     'Lainnya': 'Lainnya'
 };
 
-export const useSubscriptionAutoRecord = () => {
-    const { subscriptions, transactions, loading } = useFinanceStore();
+/**
+ * Mencatat langganan yang sudah jatuh tempo bulan ini.
+ * Idempoten: tiap langganan per bulan punya external_id `sub:{id}:{yyyy-mm}`,
+ * dan database menolak duplikat (unique user_id+source+external_id).
+ * Jalan sekali per sesi setelah data termuat.
+ */
+export const useSubscriptionAutoRecord = (onRecorded?: () => void) => {
+    const { subscriptions, transactions, loading, accounts } = useFinanceStore();
     const { addTransaction } = useSupabase();
+    const ranRef = useRef(false);
 
     useEffect(() => {
-        if (loading || subscriptions.length === 0 || transactions.length === 0) return;
+        if (ranRef.current || loading || subscriptions.length === 0 || accounts.length === 0) return;
+        ranRef.current = true;
 
-        const checkAndRecord = async () => {
+        (async () => {
             const now = new Date();
-            const currentDay = now.getDate();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
+            const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const account = accounts.find(a => institutionForAccount(a).kind === 'cash')?.name ?? accounts[0].name;
+            let recorded = 0;
 
             for (const sub of subscriptions) {
-                // 1. Is it due? (Today >= Billing Date)
-                if (currentDay >= sub.billingDate) {
+                if (now.getDate() < sub.billingDate) continue;
 
-                    // 2. Check if already paid THIS MONTH
-                    // Look for transaction with description "Auto Sub: {Name}" in current month
-                    const isPaid = transactions.some(t => {
-                        const tDate = new Date(t.timestamp);
-                        const isSameMonth = tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
-                        const isAutoSub = t.description === `Auto Sub: ${sub.name}`;
-                        return isSameMonth && isAutoSub;
-                    });
+                // Data lama (sebelum ada external_id) dikenali dari deskripsinya
+                const legacyPaid = transactions.some(t => {
+                    const d = new Date(t.timestamp);
+                    return t.description === `Auto Sub: ${sub.name}` && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                });
+                if (legacyPaid) continue;
 
-                    if (!isPaid) {
-                        console.log(`Auto-recording subscription: ${sub.name}`);
-
-                        // 3. Create Transaction
-                        const newTx: TransactionInput = {
-                            type: 'expense',
-                            amount: sub.amount,
-                            category: CATEGORY_MAP[sub.category] || 'Lainnya',
-                            description: `Auto Sub: ${sub.name}`,
-                            account: 'Cash', // User requested 'Cash'
-                        };
-
-                        // We use the hook's function directly. 
-                        // Note: In a real app, we might want to batch this or ask for confirmation,
-                        // but "Auto" implies automatic.
-                        await addTransaction(newTx);
-
-                        // Small delay to prevent race conditions if multiple subs trigger at once
-                        await new Promise(r => setTimeout(r, 1000));
-                    }
-                }
+                const ok = await addTransaction({
+                    type: 'expense',
+                    amount: sub.amount,
+                    category: CATEGORY_MAP[sub.category] || 'Lainnya',
+                    description: `Auto Sub: ${sub.name}`,
+                    account,
+                    source: 'subscription',
+                    externalId: `sub:${sub.id}:${monthKey}`,
+                });
+                if (ok) recorded++;
             }
-        };
 
-        checkAndRecord();
-
-    }, [subscriptions, transactions, loading, addTransaction]);
+            if (recorded > 0) onRecorded?.();
+        })();
+    }, [subscriptions, transactions, loading, accounts, addTransaction, onRecorded]);
 };

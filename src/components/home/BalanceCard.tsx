@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Wallet, RefreshCw, Coffee, ShoppingBag, Zap, ArrowLeftRight } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { Eye, EyeOff, RefreshCw, Coffee, ShoppingBag, Zap, ArrowLeftRight, type LucideIcon } from 'lucide-react';
+import { formatRupiah } from '../../lib/utils';
 
 interface BalanceCardProps {
     name?: string;
@@ -15,123 +15,84 @@ interface BalanceCardProps {
     onQuickPay?: (category: string, type: 'expense' | 'transfer') => void;
 }
 
-export const BalanceCard = ({ name = "Total Saldo", balance, color = "from-brimo-primary to-brimo-secondary", loading, breakdown, onTransfer, onQuickPay }: BalanceCardProps) => {
-    const [visible, setVisible] = useState(false);
+const VISIBILITY_KEY = 'rplanner_balance_visible';
 
-    // Format currency: IDR
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-        }).format(amount);
+export const BalanceCard = ({ name = 'Total Saldo', balance, loading, breakdown, onTransfer, onQuickPay }: BalanceCardProps) => {
+    const [visible, setVisible] = useState(() => localStorage.getItem(VISIBILITY_KEY) === '1');
+
+    const toggleVisible = () => {
+        setVisible(v => {
+            localStorage.setItem(VISIBILITY_KEY, v ? '0' : '1');
+            return !v;
+        });
     };
 
-    return (
-        <div className={cn("w-full rounded-2xl p-5 text-white shadow-lg shadow-blue-200 mb-6 relative overflow-hidden bg-gradient-to-r shrink-0 snap-center", color)}>
-            {/* Decorative Circles */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+    const isTotal = name === 'Total Saldo';
 
-            {/* Header: Account Info */}
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-full">
-                        <Wallet className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                        <p className="text-xs text-white/90 font-medium tracking-wide">{name}</p>
-                        {/* <div className="flex items-center gap-1 group cursor-pointer" onClick={() => alert("Copied!")}>
-                            <p className="text-[10px] text-blue-200 font-mono">1234 **** 5678</p>
-                            <Copy className="w-3 h-3 text-blue-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div> */}
-                    </div>
-                </div>
-                <div className="flex gap-2">
+    return (
+        <section aria-label={`Saldo ${name}`} className="relative overflow-hidden rounded-2xl bg-[#0B3C7A] text-white shadow-rp-2 mb-6">
+            {/* Potongan diagonal — mengulang bentuk logo */}
+            <div
+                aria-hidden
+                className="absolute -top-px right-0 w-40 h-full bg-[#1F5FDB]/40"
+                style={{ clipPath: 'polygon(55% 0, 100% 0, 100% 70%, 20% 100%, 0 100%)' }}
+            />
+
+            <div className="relative p-5">
+                <div className="flex justify-between items-start">
+                    <p className="text-sm font-medium text-white/80">{name}</p>
                     <button
-                        onClick={() => setVisible(!visible)}
-                        className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                        onClick={toggleVisible}
+                        aria-label={visible ? 'Sembunyikan saldo' : 'Tampilkan saldo'}
+                        aria-pressed={visible}
+                        className="-mt-2 -mr-2 w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition"
                     >
-                        {visible ? <EyeOff className="w-5 h-5 text-blue-100" /> : <Eye className="w-5 h-5 text-blue-100" />}
+                        {visible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                 </div>
-            </div>
 
-            {/* Balance */}
-            <div className="mb-4">
-                <p className="text-xs text-blue-200 mb-1">Saldo Rekening</p>
-                <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-bold tracking-tight">
+                <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[32px] leading-tight font-bold rp-num">
                         {loading ? (
-                            <span className="animate-pulse">Loading...</span>
+                            <span className="inline-block w-44 h-8 rounded-lg bg-white/15 animate-pulse align-middle" />
                         ) : visible ? (
-                            formatCurrency(balance)
+                            formatRupiah(balance)
                         ) : (
-                            "Rp •••••••••"
+                            'Rp••••••'
                         )}
-                    </h2>
-                    {loading && <RefreshCw className="w-4 h-4 animate-spin text-blue-200" />}
+                    </p>
+                    {loading && <RefreshCw className="w-4 h-4 animate-spin text-white/70" aria-label="Memuat" />}
                 </div>
 
-                {/* Breakdown (Only if provided) */}
-                {breakdown && visible && (
-                    <div className="flex gap-6 mt-3 pt-3 border-t border-white/10">
+                {breakdown && visible && !loading && (
+                    <dl className="flex gap-8 mt-4 pt-3 border-t border-dashed border-white/25">
                         <div>
-                            <p className="text-[10px] text-blue-200 uppercase tracking-wider">Cash</p>
-                            <p className="text-sm font-semibold">{formatCurrency(breakdown.cash)}</p>
+                            <dt className="text-xs text-white/70">Tunai</dt>
+                            <dd className="text-sm font-semibold rp-num">{formatRupiah(breakdown.cash)}</dd>
                         </div>
                         <div>
-                            <p className="text-[10px] text-blue-200 uppercase tracking-wider">Bank</p>
-                            <p className="text-sm font-semibold">{formatCurrency(breakdown.bank)}</p>
+                            <dt className="text-xs text-white/70">Bank & e-wallet</dt>
+                            <dd className="text-sm font-semibold rp-num">{formatRupiah(breakdown.bank)}</dd>
                         </div>
-                    </div>
+                    </dl>
                 )}
             </div>
 
-            {/* Quick Pays (Only for Main Total Balance Card) */}
-            {(name === "Total Saldo") && (
-                <div className="mt-4 pt-4 border-t border-white/10 bg-black/10 -mx-5 -mb-5 px-5 py-3 grid grid-cols-4 gap-2 text-center">
-                    <button
-                        onClick={() => onTransfer && onTransfer()}
-                        className="flex flex-col items-center gap-1 group"
-                    >
-                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
-                            <ArrowLeftRight className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-[10px] text-white/90 font-medium">Transfer</span>
-                    </button>
-
-                    <button
-                        onClick={() => onQuickPay && onQuickPay('Makan Weekday', 'expense')}
-                        className="flex flex-col items-center gap-1 group"
-                    >
-                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
-                            <Coffee className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-[10px] text-white/90 font-medium font-sans">Makan</span>
-                    </button>
-
-                    <button
-                        onClick={() => onQuickPay && onQuickPay('Jajan/Hobi', 'expense')}
-                        className="flex flex-col items-center gap-1 group"
-                    >
-                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
-                            <ShoppingBag className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-[10px] text-white/90 font-medium font-sans">Jajan</span>
-                    </button>
-
-                    <button
-                        onClick={() => onQuickPay && onQuickPay('Utilitas', 'expense')}
-                        className="flex flex-col items-center gap-1 group"
-                    >
-                        <div className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition active:scale-95 mx-auto">
-                            <Zap className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-[10px] text-white/90 font-medium font-sans">Utilitas</span>
-                    </button>
+            {isTotal && (
+                <div className="relative grid grid-cols-4 bg-black/15 px-2 py-2">
+                    <QuickButton icon={ArrowLeftRight} label="Transfer" onClick={() => onTransfer?.()} />
+                    <QuickButton icon={Coffee} label="Makan" onClick={() => onQuickPay?.('Makan Weekday', 'expense')} />
+                    <QuickButton icon={ShoppingBag} label="Jajan" onClick={() => onQuickPay?.('Jajan/Hobi', 'expense')} />
+                    <QuickButton icon={Zap} label="Utilitas" onClick={() => onQuickPay?.('Utilitas', 'expense')} />
                 </div>
             )}
-        </div>
+        </section>
     );
 };
+
+const QuickButton = ({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) => (
+    <button onClick={onClick} className="flex flex-col items-center gap-1 py-1.5 rounded-xl hover:bg-white/10 active:scale-95 transition">
+        <Icon className="w-5 h-5" />
+        <span className="text-xs font-medium text-white/90">{label}</span>
+    </button>
+);

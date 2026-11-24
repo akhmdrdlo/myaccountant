@@ -33,13 +33,13 @@ const TIPS = [
         title: "Waspadai Bocor Alus (Langganan Rutin)",
         desc: "Periksa kembali langganan aplikasi/layanan bulananmu secara berkala. Matikan langganan yang sudah tidak digunakan secara aktif selama lebih dari sebulan.",
         tag: "Efisiensi",
-        color: "border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-900/20"
+        color: "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900/20"
     }
 ];
 
 export const TipsView = ({ onBack }: TipsViewProps) => {
     return (
-        <div className="flex flex-col min-h-[80vh] bg-brimo-bg dark:bg-gray-900 transition-colors">
+        <div className="flex flex-col min-h-[80vh] bg-rp-canvas dark:bg-gray-900 transition-colors">
             {/* Header */}
             <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3">
@@ -48,17 +48,17 @@ export const TipsView = ({ onBack }: TipsViewProps) => {
                     </button>
                     <div>
                         <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Lightbulb className="w-5 h-5 text-yellow-500 fill-yellow-500/20" />
+                            <Lightbulb className="w-5 h-5 text-amber-500 fill-amber-500/20" />
                             Tips Finansial
                         </h2>
-                        <p className="text-[10px] text-gray-400">Tips cerdas mengelola uang Anda</p>
+                        <p className="text-xs text-gray-400">Tips cerdas mengelola uang Anda</p>
                     </div>
                 </div>
             </div>
 
             {/* Content list */}
             <div className="p-4 space-y-4">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
                     <div className="absolute -right-6 -bottom-6 opacity-10">
                         <BookOpen size={120} />
                     </div>
@@ -71,10 +71,10 @@ export const TipsView = ({ onBack }: TipsViewProps) => {
                         <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:shadow-md flex gap-3">
                             <div className="flex-1 space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase border ${tip.color}`}>
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold uppercase border ${tip.color}`}>
                                         {tip.tag}
                                     </span>
-                                    <span className="text-[10px] text-gray-400 font-bold">Tips #{idx + 1}</span>
+                                    <span className="text-xs text-gray-400 font-bold">Tips #{idx + 1}</span>
                                 </div>
                                 <h4 className="font-bold text-sm text-gray-800 dark:text-white">{tip.title}</h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{tip.desc}</p>

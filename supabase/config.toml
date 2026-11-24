@@ -1,0 +1,13 @@
+project_id = "rplanner"
+
+# Konfigurasi Edge Functions Rplanner.
+# `ingest` dan `reminders` memakai token/secret sendiri, bukan JWT Supabase.
+
+[functions.ingest]
+verify_jwt = false
+
+[functions.reminders]
+verify_jwt = false
+
+[functions.push-test]
+verify_jwt = true

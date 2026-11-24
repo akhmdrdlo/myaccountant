@@ -64,7 +64,7 @@ export const DeadlinesView = ({ onBack }: DeadlinesViewProps) => {
     };
 
     return (
-        <div className="flex flex-col min-h-[80vh] bg-brimo-bg dark:bg-gray-900 transition-colors">
+        <div className="flex flex-col min-h-[80vh] bg-rp-canvas dark:bg-gray-900 transition-colors">
             {/* Header */}
             <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3">
@@ -73,10 +73,10 @@ export const DeadlinesView = ({ onBack }: DeadlinesViewProps) => {
                     </button>
                     <div>
                         <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Calendar className="w-5 h-5 text-indigo-500" />
+                            <Calendar className="w-5 h-5 text-blue-500" />
                             Tagihan & Pembayaran
                         </h2>
-                        <p className="text-[10px] text-gray-400">Kelola tagihan bulanan dan tanggal pembayaran terdekat</p>
+                        <p className="text-xs text-gray-400">Kelola tagihan bulanan dan tanggal pembayaran terdekat</p>
                     </div>
                 </div>
             </div>
@@ -96,24 +96,24 @@ export const DeadlinesView = ({ onBack }: DeadlinesViewProps) => {
                                 <div key={idx} className="flex items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all relative">
                                     <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-mono border ${
                                         isSub 
-                                            ? 'border-purple-100 bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:border-purple-800' 
-                                            : 'border-indigo-100 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:border-indigo-800'
+                                            ? 'border-blue-100 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' 
+                                            : 'border-blue-100 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800'
                                     }`}>
-                                        <span className="text-[8px] font-bold uppercase text-gray-400">TGL</span>
+                                        <span className="text-[11px] font-bold uppercase text-gray-400">TGL</span>
                                         <span className="text-sm font-bold">{item.date.getDate()}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start mb-0.5">
                                             <h4 className="font-bold text-sm text-gray-800 dark:text-white truncate">{item.name}</h4>
-                                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                                                isSub ? 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300' : 'bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300'
+                                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                                                isSub ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' : 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
                                             }`}>
                                                 {item.type}
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                                             <p className="font-semibold text-gray-600 dark:text-gray-300">{formatCurrency(item.amount)}</p>
-                                            <p className="text-[10px] text-gray-400">
+                                            <p className="text-xs text-gray-400">
                                                 {item.label}: {format(item.date, 'd MMM yyyy', { locale: id })}
                                             </p>
                                         </div>
