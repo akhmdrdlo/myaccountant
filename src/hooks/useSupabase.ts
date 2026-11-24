@@ -18,7 +18,9 @@ export const useSupabase = () => {
         goals?: Goal[],
         budgets?: Budget[],
         subscriptions?: Subscription[],
-        investments?: Investment[]
+        investments?: Investment[],
+        /** true jika gagal memuat (offline / error) — data lama jangan ditimpa */
+        failed?: boolean
     }> => {
         setLoading(true);
         setError(null);
@@ -26,7 +28,7 @@ export const useSupabase = () => {
             const userId = await getUserId();
             if (!userId) {
                 console.warn("User is not authenticated. Cannot fetch data.");
-                return { transactions: [] };
+                return { transactions: [], failed: true };
             }
 
             // Fetch in parallel
@@ -60,9 +62,14 @@ export const useSupabase = () => {
                 const defaultAccounts = INITIAL_METADATA.accounts.map(acc => ({
                     user_id: userId,
                     name: acc.name,
-                    initial_balance: acc.initialBalance
+                    initial_balance: acc.initialBalance,
+                    institution: acc.institution ?? null
                 }));
-                const insertRes = await supabase.from('accounts').insert(defaultAccounts).select();
+                let insertRes = await supabase.from('accounts').insert(defaultAccounts).select();
+                if (insertRes.error) {
+                    // Kolom institution belum ada (migrasi belum dijalankan) — simpan tanpa kolom itu
+                    insertRes = await supabase.from('accounts').insert(defaultAccounts.map(({ institution: _i, ...rest }) => rest)).select();
+                }
                 if (insertRes.error) {
                     console.error("Failed to seed initial accounts:", insertRes.error);
                 } else {
@@ -80,12 +87,15 @@ export const useSupabase = () => {
                 description: tx.description || '',
                 account: tx.account,
                 toAccount: tx.to_account || undefined,
-                status: tx.status as any
+                status: tx.status as any,
+                tags: Array.isArray(tx.tags) ? tx.tags : []
             }));
 
             const accounts = accountsData.map(acc => ({
+                id: acc.id,
                 name: acc.name,
-                initialBalance: Number(acc.initial_balance)
+                initialBalance: Number(acc.initial_balance),
+                institution: acc.institution ?? undefined
             }));
 
             const goals: Goal[] = (goalsRes.data || []).map(g => ({
@@ -94,7 +104,8 @@ export const useSupabase = () => {
                 targetAmount: Number(g.target_amount),
                 currentAmount: Number(g.current_amount),
                 deadline: g.deadline || undefined,
-                color: g.color || undefined
+                color: g.color || undefined,
+                linkedAccount: g.linked_account || undefined
             }));
 
             const budgets: Budget[] = (budgetsRes.data || []).map(b => ({
@@ -138,36 +149,163 @@ export const useSupabase = () => {
         } catch (err: any) {
             console.error("Fetch Supabase error:", err);
             setError(err.message || 'Gagal memuat data dari Supabase.');
-            return { transactions: [] };
+            return { transactions: [], failed: true };
         } finally {
             setLoading(false);
         }
     }, []);
 
-    const addTransaction = useCallback(async (transaction: TransactionInput & { id?: string }) => {
+    /**
+     * Simpan transaksi. Jika `externalId` diisi (transaksi otomatis), insert bersifat idempoten:
+     * memanggil dua kali dengan source+externalId yang sama tidak membuat duplikat.
+     */
+    const addTransaction = useCallback(async (transaction: TransactionInput & { id?: string; source?: string; externalId?: string; timestamp?: string }) => {
         try {
             const userId = await getUserId();
             if (!userId) return false;
 
-            const newTx = {
+            const newTx: Record<string, unknown> = {
                 id: transaction.id || undefined, // let database generate UUID if not specified
                 user_id: userId,
                 type: transaction.type,
                 category: transaction.category,
-                amount: transaction.amount,
+                amount: Math.round(transaction.amount),
                 description: transaction.description || '',
                 account: transaction.account,
                 to_account: transaction.toAccount || null,
                 status: 'completed'
             };
+            if (transaction.tags?.length) newTx.tags = transaction.tags;
+            if (transaction.timestamp) newTx.timestamp = transaction.timestamp;
 
-            const { error } = await supabase.from('transactions').insert([newTx]);
+            if (transaction.externalId) {
+                newTx.source = transaction.source ?? 'auto';
+                newTx.external_id = transaction.externalId;
+            }
+            const write = () => transaction.externalId
+                ? supabase.from('transactions').upsert([newTx], { onConflict: 'user_id,source,external_id', ignoreDuplicates: true })
+                : supabase.from('transactions').insert([newTx]);
+
+            let { error } = await write();
+            if (error && newTx.tags && /tags/.test(error.message)) {
+                // Kolom tags belum dimigrasi — simpan tanpa tag
+                delete newTx.tags;
+                ({ error } = await write());
+            }
             if (error) throw error;
             return true;
         } catch (err) {
             console.error("Error adding transaction to Supabase:", err);
             return false;
         }
+    }, []);
+
+    const updateTransaction = useCallback(async (tx: Pick<Transaction, 'id' | 'type' | 'category' | 'amount' | 'description' | 'account' | 'timestamp' | 'tags'>) => {
+        const patch: Record<string, unknown> = {
+            type: tx.type,
+            category: tx.category,
+            amount: Math.round(tx.amount),
+            description: tx.description || '',
+            account: tx.account,
+            timestamp: tx.timestamp,
+        };
+        if (tx.tags) patch.tags = tx.tags;
+        let { error } = await supabase.from('transactions').update(patch).eq('id', tx.id);
+        if (error && /tags/.test(error.message)) {
+            delete patch.tags;
+            ({ error } = await supabase.from('transactions').update(patch).eq('id', tx.id));
+        }
+        if (error) {
+            console.error('Error updating transaction:', error);
+            return false;
+        }
+        return true;
+    }, []);
+
+    /**
+     * Impor banyak transaksi sekaligus (dari CSV mutasi). Idempoten: baris yang sudah pernah
+     * diimpor dilewati berkat unique (user_id, source, external_id). Mengembalikan jumlah baris yang dikirim.
+     */
+    const importTransactions = useCallback(async (
+        rows: { date: Date; description: string; amount: number; type: 'income' | 'expense'; category: string; externalId: string }[],
+        account: string,
+        onProgress?: (done: number) => void,
+    ) => {
+        const userId = await getUserId();
+        if (!userId) return { ok: false, sent: 0 };
+        let sent = 0;
+        for (let i = 0; i < rows.length; i += 200) {
+            const chunk = rows.slice(i, i + 200).map(r => ({
+                user_id: userId,
+                type: r.type,
+                category: r.category,
+                amount: Math.round(r.amount),
+                description: r.description.slice(0, 200),
+                account,
+                status: 'completed',
+                timestamp: r.date.toISOString(),
+                source: 'import',
+                external_id: r.externalId,
+            }));
+            const { error } = await supabase.from('transactions').upsert(chunk, { onConflict: 'user_id,source,external_id', ignoreDuplicates: true });
+            if (error) {
+                console.error('Import error:', error);
+                return { ok: false, sent };
+            }
+            sent += chunk.length;
+            onProgress?.(sent);
+        }
+        return { ok: true, sent };
+    }, []);
+
+    const deleteTransactions = useCallback(async (ids: string[]) => {
+        if (ids.length === 0) return true;
+        const { error } = await supabase.from('transactions').delete().in('id', ids);
+        if (error) {
+            console.error('Error deleting transactions:', error);
+            return false;
+        }
+        return true;
+    }, []);
+
+    /** Tambah akun baru. */
+    const createAccount = useCallback(async (acc: { name: string; initialBalance: number; institution?: string }) => {
+        const userId = await getUserId();
+        if (!userId) return false;
+        const row = { user_id: userId, name: acc.name, initial_balance: Math.round(acc.initialBalance), institution: acc.institution ?? null };
+        let { error } = await supabase.from('accounts').insert(row);
+        if (error && /institution/.test(error.message)) {
+            ({ error } = await supabase.from('accounts').insert({ user_id: userId, name: acc.name, initial_balance: row.initial_balance }));
+        }
+        if (error) console.error('Error creating account:', error);
+        return !error;
+    }, []);
+
+    /** Ubah akun. Jika nama berubah, transaksi lama ikut dipindah ke nama baru. */
+    const updateAccount = useCallback(async (oldName: string, acc: { name: string; initialBalance: number; institution?: string }) => {
+        const patch: Record<string, unknown> = { name: acc.name, initial_balance: Math.round(acc.initialBalance), institution: acc.institution ?? null };
+        let { error } = await supabase.from('accounts').update(patch).eq('name', oldName);
+        if (error && /institution/.test(error.message)) {
+            delete patch.institution;
+            ({ error } = await supabase.from('accounts').update(patch).eq('name', oldName));
+        }
+        if (error) { console.error('Error updating account:', error); return false; }
+        if (oldName !== acc.name) {
+            const [a, b, g] = await Promise.all([
+                supabase.from('transactions').update({ account: acc.name }).eq('account', oldName),
+                supabase.from('transactions').update({ to_account: acc.name }).eq('to_account', oldName),
+                supabase.from('goals').update({ linked_account: acc.name }).eq('linked_account', oldName),
+            ]);
+            if (a.error || b.error) { console.error('Error renaming account in transactions:', a.error ?? b.error); return false; }
+            if (g.error) console.warn('linked_account belum dimigrasi:', g.error.message);
+        }
+        return true;
+    }, []);
+
+    const deleteAccount = useCallback(async (name: string) => {
+        const { error } = await supabase.from('accounts').delete().eq('name', name);
+        if (error) console.error('Error deleting account:', error);
+        return !error;
     }, []);
 
     const addGoal = useCallback(async (goal: Goal) => {
@@ -182,7 +320,8 @@ export const useSupabase = () => {
                 target_amount: goal.targetAmount,
                 current_amount: goal.currentAmount,
                 deadline: goal.deadline || null,
-                color: goal.color || null
+                color: goal.color || null,
+                linked_account: goal.linkedAccount || null
             }]);
 
             if (error) throw error;
@@ -204,7 +343,8 @@ export const useSupabase = () => {
                     target_amount: goal.targetAmount,
                     current_amount: goal.currentAmount,
                     deadline: goal.deadline || null,
-                    color: goal.color || null
+                    color: goal.color || null,
+                    linked_account: goal.linkedAccount || null
                 })
                 .eq('id', goal.id)
                 .eq('user_id', userId);
@@ -423,6 +563,12 @@ export const useSupabase = () => {
 
     return {
         fetchTransactions,
+        updateTransaction,
+        importTransactions,
+        deleteTransactions,
+        createAccount,
+        updateAccount,
+        deleteAccount,
         addTransaction,
         addGoal,
         updateGoal,

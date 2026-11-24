@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
-import { X, Check, Wallet, ArrowRightLeft, Settings } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { X, Check, ArrowRightLeft, Settings, Camera } from 'lucide-react';
 import { toast } from 'sonner';
+import { AI_ENABLED, AiError, aiReadReceipt } from '../../lib/ai';
+import { cn } from '../../lib/utils';
 import type { TransactionInput } from '../../types';
 import { useFinanceStore } from '../../store/useFinanceStore';
+import { institutionForAccount } from '../../lib/institutions';
+import { findRule } from '../../lib/merchantRules';
+import { TagInput } from '../common/TagInput';
+import { InstitutionLogo } from '../common/InstitutionLogo';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../lib/categories';
 
 interface TransactionFormProps {
     isOpen: boolean;
@@ -16,79 +22,111 @@ interface TransactionFormProps {
 
 // Smart Category Mapping (Default Fallbacks)
 const KEYWORD_MAP: Record<string, string> = {
-    'makan': 'Makanan & Minuman',
-    'nasi': 'Makanan & Minuman',
-    'warteg': 'Makanan & Minuman',
-    'kfc': 'Makanan & Minuman',
-    'mcd': 'Makanan & Minuman',
-    'bakso': 'Makanan & Minuman',
-    'soto': 'Makanan & Minuman',
-    'gojek': 'Transportasi',
-    'grab': 'Transportasi',
-    'bensin': 'Transportasi',
-    'parkir': 'Transportasi',
-    'tol': 'Transportasi',
-    'listrik': 'Tagihan',
-    'air': 'Tagihan',
-    'wifi': 'Tagihan',
-    'pulsa': 'Tagihan',
-    'kopi': 'Belanja',
-    'snack': 'Belanja',
-    'admin': 'Lainnya',
-    'transfer': 'Lainnya',
+    'makan': 'Makan Weekday',
+    'nasi': 'Makan Weekday',
+    'warteg': 'Makan Weekday',
+    'kfc': 'Makan Weekday',
+    'mcd': 'Makan Weekday',
+    'bakso': 'Makan Weekday',
+    'soto': 'Makan Weekday',
+    'kopi': 'Makan Weekday',
+    'gojek': 'Transport',
+    'goride': 'Transport',
+    'grab': 'Transport',
+    'bensin': 'Transport',
+    'parkir': 'Transport',
+    'tol': 'Transport',
+    'listrik': 'Utilitas',
+    'token': 'Utilitas',
+    'air': 'Utilitas',
+    'wifi': 'Utilitas',
+    'pulsa': 'Utilitas',
+    'snack': 'Jajan/Hobi',
+    'indomaret': 'Jajan/Hobi',
+    'alfamart': 'Jajan/Hobi',
+    'kos': 'Kos (Tabungan)',
 };
 
 export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading, accounts = [] }: TransactionFormProps) => {
     const storeAccounts = useFinanceStore(state => state.accounts);
     const storeExpenseCategories = useFinanceStore(state => state.expenseCategories);
     const storeIncomeCategories = useFinanceStore(state => state.incomeCategories);
+    const merchantRules = useFinanceStore(state => state.merchantRules);
 
     const activeAccounts = storeAccounts && storeAccounts.length > 0
         ? storeAccounts.map(a => a.name)
-        : ['Cash', 'Bank BCA', 'Gopay'];
+        : ['Kantong Utama'];
 
-    const activeExpenseCategories = storeExpenseCategories && storeExpenseCategories.length > 0
-        ? storeExpenseCategories
-        : ['Makanan & Minuman', 'Transportasi', 'Belanja', 'Hiburan', 'Tagihan', 'Lainnya'];
-
-    const activeIncomeCategories = storeIncomeCategories && storeIncomeCategories.length > 0
-        ? storeIncomeCategories
-        : ['Gaji', 'Bonus', 'Freelance', 'Lainnya'];
+    // Kategori aplikasi (sama dengan budget) didahulukan; kategori kustom pengguna ikut di belakang.
+    const activeExpenseCategories = [...new Set([...EXPENSE_CATEGORIES, ...(storeExpenseCategories ?? []).filter(c => !/^(Makanan & Minuman|Transportasi|Belanja|Hiburan|Tagihan)$/.test(c))])];
+    const activeIncomeCategories = [...new Set([...INCOME_CATEGORIES, ...(storeIncomeCategories ?? [])])];
 
     const [type, setType] = useState<'income' | 'expense' | 'transfer' | 'adjustment'>('expense');
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
-    const [account, setAccount] = useState('Cash');
-    const [toAccount, setToAccount] = useState('Bank BCA'); // For Transfer
+    const [tags, setTags] = useState<string[]>([]);
+    const [account, setAccount] = useState('');
+    const [toAccount, setToAccount] = useState(''); // For Transfer
 
     // Reset/Prefill form when opened
     useEffect(() => {
         if (isOpen) {
-            const defaultAcc = activeAccounts.includes('Cash') ? 'Cash' : (activeAccounts[0] || 'Cash');
+            const defaultAcc = storeAccounts.find(a => institutionForAccount(a).kind === 'cash')?.name ?? activeAccounts[0] ?? '';
             if (initialData) {
                 setType(initialData.type || 'expense');
                 setCategory(initialData.category || '');
                 setAmount(initialData.amount ? initialData.amount.toString() : '');
                 setDescription(initialData.description || '');
+                setTags(initialData.tags ?? []);
                 setAccount(initialData.account || defaultAcc);
-                setToAccount(initialData.toAccount || activeAccounts.find(a => a !== (initialData.account || defaultAcc)) || 'Bank BCA');
+                setToAccount(initialData.toAccount || activeAccounts.find(a => a !== (initialData.account || defaultAcc)) || '');
             } else {
                 setAccount(defaultAcc);
-                setToAccount(activeAccounts.find(a => a !== defaultAcc) || 'Bank BCA');
+                setToAccount(activeAccounts.find(a => a !== defaultAcc) || '');
                 setType('expense');
                 setAmount('');
                 setCategory('');
                 setDescription('');
+                setTags([]);
             }
         }
     }, [isOpen, initialData]);
+
+    // Pindai struk dengan Claude Haiku (vision)
+    const [scanning, setScanning] = useState(false);
+    const handleScanReceipt = async (file: File) => {
+        setScanning(true);
+        try {
+            const receipt = await aiReadReceipt(file);
+            if (!receipt) {
+                toast.error('Struk tidak terbaca. Coba foto lebih dekat dan terang.');
+                return;
+            }
+            setType('expense');
+            setAmount(String(receipt.total));
+            setCategory(receipt.category);
+            setDescription(receipt.merchant);
+            toast.success(`Terbaca ${receipt.merchant || 'struk'}: Rp${receipt.total.toLocaleString('id-ID')}. Cek lalu simpan.`);
+        } catch (err) {
+            toast.error(err instanceof AiError ? err.message : 'Gagal membaca struk.');
+        } finally {
+            setScanning(false);
+        }
+    };
 
     // Smart Category Logic
     useEffect(() => {
         if (!isOpen || type !== 'expense' || category !== '') return; // Only verify if category is empty or user hasn't manually set it? 
         // Better: Only auto-set if the user is typing and found a match, but let's just do simple match
 
+        // 1) Kategori yang pernah kamu pilih untuk merchant ini
+        const learned = findRule(merchantRules, description);
+        if (learned) {
+            setCategory(learned.category);
+            return;
+        }
+        // 2) Tebakan kata kunci bawaan
         const lowerDesc = description.toLowerCase();
         for (const [key, cat] of Object.entries(KEYWORD_MAP)) {
             if (lowerDesc.includes(key)) {
@@ -96,7 +134,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                 break;
             }
         }
-    }, [description, type, isOpen, category]);
+    }, [description, type, isOpen, category, merchantRules]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -145,7 +183,8 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
             category: finalCategory,
             description: finalDescription,
             account,
-            toAccount: type === 'transfer' ? toAccount : undefined
+            toAccount: type === 'transfer' ? toAccount : undefined,
+            tags: type === 'expense' || type === 'income' ? tags : undefined,
         });
 
         if (success) {
@@ -179,16 +218,30 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                         {type === 'adjustment' ? 'Penyesuaian Saldo' : 'Catat Transaksi'}
                     </h3>
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => toast.warning("Fitur Scan Resi segera hadir! (Coming Soon)")}
-                            className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 rounded-lg font-bold border border-blue-150 dark:border-blue-900/50 hover:bg-blue-100 transition active:scale-95 flex items-center gap-1"
+                        {AI_ENABLED && <label
+                            className={cn(
+                                "h-11 px-3 flex items-center gap-1.5 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold cursor-pointer",
+                                scanning && "opacity-60 pointer-events-none"
+                            )}
                         >
-                            📷 Scan Resi
-                        </button>
+                            <Camera className="w-4 h-4" />
+                            {scanning ? 'Membaca…' : 'Pindai struk'}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="sr-only"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (file) handleScanReceipt(file);
+                                }}
+                            />
+                        </label>}
                         <button
                             onClick={onClose}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                            aria-label="Tutup"
+                            className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
                         >
                             <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                         </button>
@@ -197,19 +250,19 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
 
                 <form onSubmit={handleSubmit} className="space-y-5 pb-10">
                     {/* Type Navigation */}
-                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-x-auto scrollbar-hide">
+                    <div className="grid grid-cols-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
                         {[
-                            { id: 'expense', label: 'Pengeluaran', color: 'text-red-500' },
-                            { id: 'income', label: 'Pemasukan', color: 'text-green-500' },
-                            { id: 'transfer', label: 'Transfer', color: 'text-blue-500', icon: ArrowRightLeft },
-                            { id: 'adjustment', label: 'Atur Saldo', color: 'text-purple-500', icon: Settings }
+                            { id: 'expense', label: 'Keluar', color: 'text-red-600 dark:text-red-400' },
+                            { id: 'income', label: 'Masuk', color: 'text-green-600 dark:text-green-400' },
+                            { id: 'transfer', label: 'Transfer', color: 'text-blue-600 dark:text-blue-400', icon: ArrowRightLeft },
+                            { id: 'adjustment', label: 'Koreksi', color: 'text-blue-600 dark:text-blue-400', icon: Settings }
                         ].map((t) => (
                             <button
                                 key={t.id}
                                 type="button"
                                 onClick={() => setType(t.id as any)}
                                 className={cn(
-                                    "flex-1 min-w-[90px] py-2.5 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                    "min-h-[44px] px-1 text-[13px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
                                     type === t.id
                                         ? `bg-white dark:bg-gray-700 ${t.color} shadow-sm`
                                         : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -233,7 +286,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                 value={amount}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
                                 placeholder="0"
-                                className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary font-bold text-2xl text-gray-800 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rp-navy/20 focus:border-rp-navy font-bold text-2xl text-gray-800 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                                 required
                                 autoFocus
                             />
@@ -254,11 +307,11 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                     className={cn(
                                         "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
                                         account === acc
-                                            ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                            ? "bg-blue-50 border-rp-navy text-rp-navy shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
                                             : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                                     )}
                                 >
-                                    <Wallet className="w-3.5 h-3.5" />
+                                    <InstitutionLogo institution={institutionForAccount(storeAccounts.find(a => a.name === acc) ?? { name: acc })} size="sm" className="!w-6 !h-6 !rounded-md !text-[8px]" />
                                     <span className="text-xs font-medium">{acc}</span>
                                 </button>
                             ))}
@@ -280,11 +333,11 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                         className={cn(
                                             "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
                                             toAccount === acc
-                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                                ? "bg-blue-50 border-rp-navy text-rp-navy shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
                                                 : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                                         )}
                                     >
-                                        <Wallet className="w-3.5 h-3.5" />
+                                        <InstitutionLogo institution={institutionForAccount(storeAccounts.find(a => a.name === acc) ?? { name: acc })} size="sm" className="!w-6 !h-6 !rounded-md !text-[8px]" />
                                         <span className="text-xs font-medium">{acc}</span>
                                     </button>
                                 ))}
@@ -305,7 +358,7 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                                         className={cn(
                                             "px-3 py-1.5 text-xs rounded-full border transition-all",
                                             category === cat
-                                                ? "bg-blue-50 border-brimo-primary text-brimo-primary font-medium dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
+                                                ? "bg-blue-50 border-rp-navy text-rp-navy font-medium dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
                                                 : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600"
                                         )}
                                     >
@@ -324,15 +377,22 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
                             value={description}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
                             placeholder={type === 'transfer' ? 'Berita transfer...' : type === 'adjustment' ? 'Keterangan koreksi...' : 'Makan siang...'}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brimo-primary/20 focus:border-brimo-primary text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rp-navy/20 focus:border-rp-navy text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                         />
                     </div>
+
+                    {(type === 'expense' || type === 'income') && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500">Tag (opsional)</label>
+                            <TagInput value={tags} onChange={setTags} />
+                        </div>
+                    )}
 
                     {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-brimo-primary hover:bg-blue-800 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+                        className="w-full bg-rp-action hover:bg-rp-action-press text-white font-semibold py-3.5 rounded-xl shadow-rp-2 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
                     >
                         {loading ? "Menyimpan..." : (
                             <>

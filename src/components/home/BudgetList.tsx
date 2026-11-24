@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { inPeriod } from '../../lib/period';
+import { useFinanceStore as usePeriodStore } from '../../store/useFinanceStore';
 import type { Transaction, Budget } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -11,16 +13,12 @@ interface BudgetListProps {
 export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetListProps) => {
 
     // Calculate expenses for current month
+    const period = usePeriodStore(st => st.period);
     const budgetStatus = useMemo(() => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         const expenses = transactions.filter(t => {
-            const date = new Date(t.timestamp);
             return t.type === 'expense' &&
-                date.getMonth() === currentMonth &&
-                date.getFullYear() === currentYear;
+                inPeriod(t.timestamp, period);
         });
 
         const status: Record<string, { spent: number; limit: number; percent: number }> = {};
@@ -51,7 +49,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
         });
 
         return status;
-    }, [transactions, budgets]);
+    }, [transactions, budgets, period]);
 
 
 
@@ -63,7 +61,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
         <div className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">
                 <h3 className="font-semibold text-gray-700 dark:text-gray-200">Budget Bulan Ini</h3>
-                <button onClick={onOpenSettings} className="text-xs text-brimo-secondary font-medium hover:underline">Atur</button>
+                <button onClick={onOpenSettings} className="text-xs text-rp-royal font-medium hover:underline">Atur</button>
             </div>
 
             <div className="space-y-3">
@@ -81,7 +79,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{category}</span>
                                     <span className={cn(
-                                        "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                                        "text-xs font-bold px-1.5 py-0.5 rounded-full",
                                         data.percent > 100 
                                             ? "bg-red-50 text-red-500 dark:bg-red-950/20" 
                                             : "bg-gray-50 text-gray-500 dark:bg-gray-700/50"
@@ -97,7 +95,7 @@ export const BudgetList = ({ transactions, budgets, onOpenSettings }: BudgetList
                                     />
                                 </div>
 
-                                <div className="flex justify-between text-[9px] text-gray-400">
+                                <div className="flex justify-between text-[11px] text-gray-400">
                                     <span>Terpakai: Rp {formatCurrency(data.spent)}</span>
                                     <span>Batas: Rp {formatCurrency(data.limit)}</span>
                                 </div>

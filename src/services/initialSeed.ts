@@ -1,25 +1,13 @@
 import type { Transaction, Goal, Budget, Subscription, Investment } from '../types';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../lib/categories';
 
 export const INITIAL_METADATA = {
+    // Akun baru hanya punya satu kantong; dompet lain ditambah sendiri lewat menu Dompet.
     accounts: [
-        { name: 'Cash', initialBalance: 0 },
-        { name: 'Bank Mandiri', initialBalance: 0 },
-        { name: 'Gopay', initialBalance: 0 }
-    ],
-    expenseCategories: [
-        'Makanan & Minuman',
-        'Transportasi',
-        'Belanja',
-        'Hiburan',
-        'Tagihan',
-        'Lainnya'
-    ],
-    incomeCategories: [
-        'Gaji',
-        'Bonus',
-        'Freelance',
-        'Lainnya'
-    ]
+        { name: 'Kantong Utama', initialBalance: 0, institution: 'cash' }
+    ] as { name: string; initialBalance: number; institution?: string }[],
+    expenseCategories: EXPENSE_CATEGORIES,
+    incomeCategories: INCOME_CATEGORIES
 };
 
 export const INITIAL_BUDGETS: Budget[] = [];

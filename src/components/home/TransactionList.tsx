@@ -21,11 +21,14 @@ const getCategoryIcon = (category: string) => {
 interface TransactionListProps {
     transactions: Transaction[];
     loading?: boolean;
+    /** Ketuk baris untuk mengubah atau menghapus */
+    onSelect?: (t: Transaction) => void;
 }
 
-export const TransactionList = ({ transactions, loading }: TransactionListProps) => {
+export const TransactionList = ({ transactions, loading, onSelect }: TransactionListProps) => {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+    const [tagFilter, setTagFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [dateRangeOption, setDateRangeOption] = useState<'all' | '1month' | '3month' | 'custom'>('all');
@@ -38,6 +41,12 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
         return Array.from(cats).sort();
     }, [transactions]);
 
+    const availableTags = useMemo(() => {
+        const count = new Map<string, number>();
+        for (const t of transactions) for (const tag of t.tags ?? []) count.set(tag, (count.get(tag) ?? 0) + 1);
+        return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+    }, [transactions]);
+
     // Filter & Sort Logic
     const filteredAndSorted = useMemo(() => {
         let result = [...transactions];
@@ -48,8 +57,13 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
             result = result.filter(t =>
                 t.description?.toLowerCase().includes(lowSearch) ||
                 t.category.toLowerCase().includes(lowSearch) ||
-                t.amount.toString().includes(lowSearch)
+                t.amount.toString().includes(lowSearch) ||
+                (t.tags ?? []).some(tag => tag.includes(lowSearch.replace(/^#/, '')))
             );
+        }
+
+        if (tagFilter) {
+            result = result.filter(t => (t.tags ?? []).includes(tagFilter));
         }
 
         // 2. Category Filter
@@ -84,7 +98,14 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
 
         // 4. Sort DESC
         return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    }, [transactions, search, categoryFilter, dateRangeOption, startDate, endDate]);
+    }, [transactions, search, categoryFilter, tagFilter, dateRangeOption, startDate, endDate]);
+
+    const tagTotals = useMemo(() => {
+        if (!tagFilter) return null;
+        const out = filteredAndSorted.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+        const inn = filteredAndSorted.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+        return { out, inn, count: filteredAndSorted.length };
+    }, [filteredAndSorted, tagFilter]);
 
     // Pagination
     const displayedTransactions = filteredAndSorted.slice(0, limit);
@@ -154,14 +175,14 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                 placeholder="Cari transaksi..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:border-brimo-primary dark:text-white"
+                                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:border-rp-navy dark:text-white"
                             />
                         </div>
                         <button
                             onClick={() => setShowFilters(!showFilters)}
                             className={cn(
                                 "p-2 rounded-xl border transition-colors",
-                                showFilters || categoryFilter ? "bg-blue-50 dark:bg-blue-900/30 border-brimo-primary text-brimo-primary" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500"
+                                showFilters || categoryFilter ? "bg-blue-50 dark:bg-blue-900/30 border-rp-navy text-rp-navy" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500"
                             )}
                         >
                             <Filter className="w-5 h-5" />
@@ -185,7 +206,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                     className={cn(
                                         "flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all",
                                         isActive 
-                                            ? "bg-white dark:bg-gray-700 text-brimo-primary dark:text-white shadow-sm" 
+                                            ? "bg-white dark:bg-gray-700 text-rp-navy dark:text-white shadow-sm" 
                                             : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                                     )}
                                 >
@@ -198,7 +219,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                     {/* Custom Calendar Pickers (only shown if 'custom' is active) */}
                     {dateRangeOption === 'custom' && (
                         <div className="bg-white dark:bg-gray-850 p-3 rounded-xl border border-gray-150 dark:border-gray-700 space-y-2 no-print animate-in fade-in slide-in-from-top-1">
-                            <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Rentang Tanggal Khusus</label>
+                            <label className="text-xs uppercase font-bold text-gray-400 mb-1 block">Rentang Tanggal Khusus</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -206,7 +227,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                         type="date"
                                         value={startDate}
                                         onChange={(e) => setStartDate(e.target.value)}
-                                        className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white focus:outline-none focus:border-brimo-primary"
+                                        className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white focus:outline-none focus:border-rp-navy"
                                     />
                                 </div>
                                 <span className="self-center text-gray-400">-</span>
@@ -216,7 +237,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                         type="date"
                                         value={endDate}
                                         onChange={(e) => setEndDate(e.target.value)}
-                                        className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white focus:outline-none focus:border-brimo-primary"
+                                        className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white focus:outline-none focus:border-rp-navy"
                                     />
                                 </div>
                             </div>
@@ -227,11 +248,11 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                     {showFilters && (
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-150 dark:border-gray-700 space-y-3 no-print animate-in fade-in slide-in-from-top-2">
                             <div>
-                                <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Kategori Transaksi</label>
+                                <label className="text-xs uppercase font-bold text-gray-400 mb-1 block">Kategori Transaksi</label>
                                 <select
                                     value={categoryFilter}
                                     onChange={(e) => setCategoryFilter(e.target.value)}
-                                    className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white focus:outline-none focus:border-brimo-primary"
+                                    className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white focus:outline-none focus:border-rp-navy"
                                 >
                                     <option value="" className="text-gray-800 bg-white">Semua Kategori</option>
                                     {availableCategories.map(cat => (
@@ -253,6 +274,26 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
             </div>
 
             <div className="no-print">
+                {availableTags.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3 -mx-1 px-1" role="group" aria-label="Filter tag">
+                        {availableTags.map(tag => (
+                            <button key={tag} onClick={() => setTagFilter(tagFilter === tag ? '' : tag)} aria-pressed={tagFilter === tag}
+                                className={cn('h-9 px-3 shrink-0 rounded-full text-xs font-semibold border transition',
+                                    tagFilter === tag ? 'bg-rp-royal border-rp-royal text-white' : 'border-rp-line text-rp-ink-2 bg-rp-surface')}>
+                                #{tag}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {tagTotals && (
+                    <div className="rp-card p-4 mb-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs text-rp-ink-2">Total #{tagFilter} · {tagTotals.count} transaksi</p>
+                            <p className="text-lg font-bold text-rp-out rp-num">−Rp{formatAmount(tagTotals.out)}</p>
+                        </div>
+                        {tagTotals.inn > 0 && <p className="text-sm font-semibold text-rp-in rp-num">+Rp{formatAmount(tagTotals.inn)}</p>}
+                    </div>
+                )}
                 {filteredAndSorted.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-gray-400">
                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
@@ -277,7 +318,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
                                             {formatDateLabel(dateKey)}
                                         </p>
-                                        <p className={cn("text-[10px] font-bold", dailyNet >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400")}>
+                                        <p className={cn("text-xs font-bold", dailyNet >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400")}>
                                             {dailyNet > 0 ? "+" : ""}{formatAmount(dailyNet)}
                                         </p>
                                     </div>
@@ -288,9 +329,13 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                             const isLast = idx === grouped[dateKey].length - 1;
 
                                             return (
-                                                <div
+                                                <button
+                                                    type="button"
                                                     key={t.id}
+                                                    onClick={() => onSelect?.(t)}
+                                                    aria-label={`${t.category}, ${isExpense ? 'keluar' : 'masuk'} Rp${formatAmount(t.amount)}. Ketuk untuk ubah`}
                                                     className={cn(
+                                                        "w-full text-left",
                                                         "flex items-center justify-between p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800",
                                                         !isLast && "border-b border-gray-50 dark:border-gray-800"
                                                     )}
@@ -301,7 +346,10 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                                         </div>
                                                         <div>
                                                             <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 capitalize">{t.category}</p>
-                                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-1">{t.description || t.type}</p>
+                                                            <p className="text-xs text-gray-400 dark:text-gray-500 line-clamp-1">{t.description || t.type}</p>
+                                                            {(t.tags?.length ?? 0) > 0 && (
+                                                                <p className="text-xs text-rp-royal line-clamp-1">{t.tags!.map(x => '#' + x).join(' ')}</p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
@@ -309,13 +357,13 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                                                             {isExpense ? "-" : "+"}Rp {formatAmount(t.amount)}
                                                         </p>
                                                         <span className={cn(
-                                                            "text-[9px] px-1.5 py-0.5 rounded-full",
+                                                            "text-[11px] px-1.5 py-0.5 rounded-full",
                                                             t.status === 'completed' ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
                                                         )}>
-                                                            {t.status === 'completed' ? "Berhasil" : "Pending"}
+                                                            {t.status === 'completed' ? "Berhasil" : "Menunggu"}
                                                         </span>
                                                     </div>
-                                                </div>
+                                                </button>
                                             );
                                         })}
                                     </div>
@@ -327,7 +375,7 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                         {hasMore && (
                             <button
                                 onClick={handleLoadMore}
-                                className="w-full py-3 bg-white dark:bg-brimo-bg border border-gray-200 dark:border-gray-200 text-gray-600 dark:text-gray-200 font-medium text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-white dark:bg-rp-canvas border border-gray-200 dark:border-gray-200 text-gray-600 dark:text-gray-200 font-medium text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                             >
                                 <ArrowDown className="w-4 h-4 dark:text-white" />
                                 Tampilkan Lebih Banyak

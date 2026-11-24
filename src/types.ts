@@ -8,6 +8,8 @@ export interface Transaction {
     account: string; // e.g., 'Bank BTN', 'Cash', 'Gopay'
     toAccount?: string; // For transfers
     status: 'pending' | 'completed' | 'failed';
+    /** Label bebas lintas kategori, mis. 'liburan bali' */
+    tags?: string[];
 }
 
 export type TransactionInput = Omit<Transaction, 'id' | 'timestamp' | 'status'>;
@@ -42,9 +44,11 @@ export interface Goal {
     id: string;
     name: string;
     targetAmount: number;
-    currentAmount: number | string; // Allow formula strings
+    currentAmount: number;
     deadline?: string;
     color?: string;
+    /** Jika diisi, jumlah terkumpul = saldo akun ini. */
+    linkedAccount?: string;
 }
 
 export interface Budget {
@@ -60,4 +64,33 @@ export interface Subscription {
     amount: number;
     billingDate: number;
     category: string;
+}
+
+export interface Debt {
+    id: string;
+    person: string;
+    /** 'owe' = aku berutang; 'owed' = orang lain berutang ke aku */
+    direction: 'owe' | 'owed';
+    amount: number;
+    note?: string;
+    dueDate?: string;
+    settledAt?: string;
+    createdAt: string;
+}
+
+export interface Installment {
+    id: string;
+    name: string;
+    account?: string;
+    monthlyAmount: number;
+    totalMonths: number;
+    paidMonths: number;
+    dueDay: number;
+}
+
+export interface MerchantRule {
+    merchantKey: string;
+    category: string;
+    account?: string;
+    hits: number;
 }

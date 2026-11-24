@@ -6,11 +6,11 @@ import type { Transaction } from '../../types';
 const ACTIONS = [
     { id: 'makan_weekday', label: 'Makan Weekday', icon: Utensils, categoryMatch: 'Makan Weekday', color: 'text-orange-500' },
     { id: 'makan_weekend', label: 'Makan Weekend', icon: Utensils, categoryMatch: 'Makan Weekend', color: 'text-red-500' },
-    { id: 'jajan', label: 'Jajan/ Hobi', icon: ShoppingBag, categoryMatch: 'Jajan/Hobi', color: 'text-pink-500' },
+    { id: 'jajan', label: 'Jajan/ Hobi', icon: ShoppingBag, categoryMatch: 'Jajan/Hobi', color: 'text-blue-500' },
     { id: 'transport', label: 'Transport', icon: Bus, categoryMatch: 'Transport', color: 'text-blue-500' },
-    { id: 'utilitas', label: 'Utilitas', icon: Zap, categoryMatch: 'Utilitas', color: 'text-yellow-500' },
+    { id: 'utilitas', label: 'Utilitas', icon: Zap, categoryMatch: 'Utilitas', color: 'text-amber-500' },
     { id: 'tarik', label: 'Tarik / Transfer', icon: Banknote, categoryMatch: 'Transfer / Tarik Tunai', color: 'text-green-500' },
-    { id: 'kos', label: 'Kos', icon: Briefcase, categoryMatch: 'Kos (Tabungan)', color: 'text-purple-500' },
+    { id: 'kos', label: 'Kos', icon: Briefcase, categoryMatch: 'Kos (Tabungan)', color: 'text-blue-500' },
     { id: 'more', label: 'Lainnya', icon: MoreHorizontal, categoryMatch: 'Lainnya', color: 'text-gray-500' },
 ];
 

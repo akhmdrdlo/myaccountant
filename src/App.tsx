@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Toaster, toast } from 'sonner';
+import { TrendingUp, Sliders, Wallet, Sparkles, Target, CalendarClock, CreditCard, HandCoins, Inbox, BellRing, X, CalendarRange, type LucideIcon } from 'lucide-react';
+
 import { Layout } from './components/layout/Layout';
+import { SubviewHeader } from './components/layout/SubviewHeader';
 import { AccountCards } from './components/home/AccountCards';
 import { TransactionList } from './components/home/TransactionList';
 import { TransactionForm } from './components/home/TransactionForm';
@@ -12,67 +16,85 @@ import { InvestmentView } from './components/home/InvestmentView';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { GoalForm } from './components/home/GoalForm';
 import { BudgetSettings } from './components/home/BudgetSettings';
-import { useSupabase } from './hooks/useSupabase';
-import { supabase } from './lib/supabase';
-import { useFinanceStore } from './store/useFinanceStore';
-import { useThemeStore } from './store/useThemeStore'; // Init Theme
 import { SpendingProgress } from './components/home/SpendingProgress';
 import { AktivitasKalender } from './components/home/AktivitasKalender';
 import { TransaksiTerbaru } from './components/home/TransaksiTerbaru';
-import type { TransactionInput, Goal, Budget } from './types';
-import { Toaster, toast } from 'sonner';
-
-import { useSubscriptionAutoRecord } from './hooks/useSubscriptionAutoRecord';
-
-// New Sub-views
 import { AiAdvisorView } from './components/home/AiAdvisorView';
 import { DompetView } from './components/home/DompetView';
 import { KebutuhanView } from './components/home/KebutuhanView';
 import { TipsView } from './components/home/TipsView';
 import { DeadlinesView } from './components/home/DeadlinesView';
-import { TrendingUp, Sliders, Wallet, Sparkles, Target, Lightbulb, Calendar, PieChart, ArrowLeft, Scan, Camera } from 'lucide-react';
+import { DraftInbox, type DraftConfirmation } from './components/notifications/DraftInbox';
+import { NotificationCenter } from './components/notifications/NotificationCenter';
+
+import { useSupabase } from './hooks/useSupabase';
+import { useSubscriptionAutoRecord } from './hooks/useSubscriptionAutoRecord';
+import { useAppNavigation } from './hooks/useAppNavigation';
+import { usePlanning } from './hooks/usePlanning';
+import { useDrafts, type TransactionDraft } from './hooks/useDrafts';
+import { supabase } from './lib/supabase';
+import { parseBankText, type ParsedBankText } from './lib/parseBankText';
+import { getCurrentSubscription, getPushSupport } from './lib/push';
+import { useFinanceStore } from './store/useFinanceStore';
+import { useThemeStore } from './store/useThemeStore';
+import { formatRupiah } from './lib/utils';
+import { AI_ENABLED } from './lib/ai';
+import { enqueue, flushQueue, queuedAsTransactions, readQueue } from './lib/offlineQueue';
+import type { Transaction, TransactionInput, Goal, Budget } from './types';
+import { TransactionEditSheet, findTransferPair } from './components/home/TransactionEditSheet';
+import { DebtsView } from './components/planning/DebtsView';
+import { InstallmentsView } from './components/planning/InstallmentsView';
+import { ImportView } from './components/planning/ImportView';
+import { PaydaySheet } from './components/planning/PaydaySheet';
+import { YearReviewView } from './components/analytics/YearReviewView';
+import { NetWorthCard } from './components/analytics/NetWorthCard';
+import { AppLock } from './components/auth/AppLock';
+
+type AddTxInput = TransactionInput & { source?: string; externalId?: string; timestamp?: string };
+
+const FEATURES: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: 'deadlines', label: 'Tagihan', icon: CalendarClock },
+  { id: 'cicilan', label: 'Cicilan', icon: CreditCard },
+  { id: 'utang', label: 'Utang', icon: HandCoins },
+  { id: 'dompet', label: 'Dompet', icon: Wallet },
+  { id: 'goals', label: 'Wishlist', icon: Target },
+  { id: 'kebutuhan', label: 'Budget', icon: Sliders },
+  { id: 'investasi', label: 'Investasi', icon: TrendingUp },
+  { id: 'ai_advisor', label: 'Tanya AI', icon: Sparkles },
+];
+
+const NUDGE_KEY = 'rplanner_push_nudge_dismissed';
+const SNAPSHOT_KEY = 'rplanner_snapshot';
+// Dibaca sekali saat modul dimuat, sebelum useAppNavigation merapikan URL.
+const INITIAL_SEARCH = window.location.search;
+let initialLinkHandled = false;
 
 function App() {
-  // Auto Record Subscriptions
-  useSubscriptionAutoRecord();
-
-  const { fetchTransactions, addTransaction, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useSupabase();
+  const { fetchTransactions, addTransaction, updateTransaction, deleteTransactions, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useSupabase();
   const {
-    transactions,
-    setTransactions,
-    setMetadata,
-    goals,
-    setGoals,
-    budgets,
-    setBudgets,
-    setSubscriptions,
-    setInvestments,
-    addTransactionOptimistic,
-    removeTransactionOptimistic,
-    setLoading,
-    loading: storeLoading,
-    getSeabankBalance // Get helper
+    transactions, setTransactions, setMetadata, goals, setGoals, budgets, setBudgets,
+    setSubscriptions, setInvestments, addTransactionOptimistic, removeTransactionOptimistic,
+    setLoading, loading: storeLoading, getAccountBalance, getAccountBalances,
   } = useFinanceStore();
+  const { fetchPlanning, learnMerchant } = usePlanning();
 
-  // Theme Init
   useThemeStore();
 
-  const [activeTab, setActiveTab] = useState('home');
-  const [currentSubview, setCurrentSubview] = useState<string | null>(null);
+  const { tab, view, setTab, openView, back, navigateToUrl } = useAppNavigation();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formInitialData, setFormInitialData] = useState<Partial<TransactionInput> | undefined>(undefined);
-
-  // New Modals State
   const [isGoalFormOpen, setIsGoalFormOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | undefined>(undefined);
   const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
+  const [showPushNudge, setShowPushNudge] = useState(false);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [paydayOpen, setPaydayOpen] = useState(false);
 
-  // Auth State
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('rplanner_token');
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('rplanner_token'));
 
-  // Listen to Supabase Auth State changes
+  const { drafts, removeDraft } = useDrafts(isAuthenticated);
+
+  // ── Auth ────────────────────────────────────────────────────
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
@@ -84,46 +106,129 @@ function App() {
         localStorage.removeItem('rplanner_token');
         localStorage.removeItem('rplanner_username');
         localStorage.removeItem('rplanner_mode');
+        localStorage.removeItem(SNAPSHOT_KEY);
         setIsAuthenticated(false);
       }
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
+
+  // ── Data ────────────────────────────────────────────────────
+  const refreshData = useCallback(async () => {
+    const [txResult, planning] = await Promise.all([fetchTransactions(), fetchPlanning()]);
+    if (planning) {
+      const st = useFinanceStore.getState();
+      st.setDebts(planning.debts);
+      st.setInstallments(planning.installments);
+      st.setMerchantRules(planning.merchantRules);
+      if (planning.payday && planning.payday !== st.payday) st.setPayday(planning.payday);
+    }
+    let result = txResult;
+    if (result.failed) {
+      // Offline / error: pakai salinan terakhir supaya layar tidak kosong
+      const snapshot = localStorage.getItem(SNAPSHOT_KEY);
+      if (!snapshot) return;
+      try {
+        result = JSON.parse(snapshot);
+      } catch {
+        return;
+      }
+    } else {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(result));
+    }
+    // Metadata (akun) dulu, baru transaksi, supaya saldo dihitung dengan saldo awal yang benar
+    if (result.metadata) setMetadata(result.metadata);
+    setTransactions([...queuedAsTransactions(), ...result.transactions]);
+    if (result.goals) setGoals(result.goals);
+    if (result.budgets) setBudgets(result.budgets);
+    if (result.subscriptions) setSubscriptions(result.subscriptions);
+    if (result.investments) setInvestments(result.investments);
+  }, [fetchTransactions, fetchPlanning, setTransactions, setMetadata, setGoals, setBudgets, setSubscriptions, setInvestments]);
+
+  // Kirim antrean offline saat app dibuka dan setiap kali kembali online
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const flush = async () => {
+      if (!navigator.onLine || readQueue().length === 0) return;
+      const { sent, dropped } = await flushQueue(q => addTransaction(q));
+      if (sent) toast.success(`${sent} transaksi tertunda berhasil terkirim.`);
+      if (dropped.length) toast.error(`${dropped.length} transaksi gagal dikirim berulang kali dan dibuang. Catat ulang manual ya.`);
+      if (sent || dropped.length) await refreshData();
+    };
+    flush();
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [isAuthenticated, addTransaction, refreshData]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-
-    const loadData = async () => {
+    (async () => {
       setLoading(true);
-      const result = await fetchTransactions();
-
-      // Handle the new return signature
-      if (Array.isArray(result)) {
-        setTransactions(result); // Fallback for mock or old API
-      } else {
-        setTransactions(result.transactions);
-        if (result.metadata) setMetadata(result.metadata);
-        if (result.goals) setGoals(result.goals);
-        if (result.budgets) setBudgets(result.budgets);
-        if (result.subscriptions) setSubscriptions(result.subscriptions);
-        if (result.investments) setInvestments(result.investments);
-      }
+      await refreshData();
       setLoading(false);
-    };
-    loadData();
-  }, [isAuthenticated, fetchTransactions, setTransactions, setMetadata, setGoals, setBudgets, setSubscriptions, setInvestments, setLoading]);
+    })();
+  }, [isAuthenticated, refreshData, setLoading]);
 
-  const handleOpenForm = (initial?: Partial<TransactionInput>) => {
+  useSubscriptionAutoRecord(refreshData);
+
+  // ── Ajakan aktifkan notifikasi (sekali, bisa ditutup) ───────
+  useEffect(() => {
+    if (!isAuthenticated || localStorage.getItem(NUDGE_KEY)) return;
+    const support = getPushSupport();
+    if (support !== 'supported' && support !== 'needs-install') return;
+    getCurrentSubscription().then(sub => setShowPushNudge(!sub));
+  }, [isAuthenticated]);
+
+  const handleOpenForm = useCallback((initial?: Partial<TransactionInput>) => {
     setFormInitialData(initial);
     setIsFormOpen(true);
-  };
+  }, []);
 
-  const handleAddTransaction = async (input: TransactionInput) => {
-    // 1. Dual Entry for Transfer
+  // ── Deep link: share target, shortcut "Catat", klik notifikasi ──
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const params = new URLSearchParams(initialLinkHandled ? '' : INITIAL_SEARCH);
+    initialLinkHandled = true;
+    const shared = [params.get('share_title'), params.get('share_text'), params.get('share_url')].filter(Boolean).join(' ');
+
+    if (shared) {
+      const parsed = parseBankText(shared);
+      if (parsed) {
+        handleOpenForm({
+          type: parsed.type,
+          amount: parsed.amount,
+          category: parsed.category,
+          description: parsed.merchant ?? '',
+        });
+        toast.info(`Terbaca ${parsed.type === 'income' ? 'pemasukan' : 'pengeluaran'} ${formatRupiah(parsed.amount)}. Cek lalu simpan.`);
+      } else {
+        handleOpenForm({ description: shared.slice(0, 120) });
+        toast.info('Nominal tidak terbaca, isi manual ya.');
+      }
+          } else if (params.get('action') === 'add') {
+      handleOpenForm();
+          }
+
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type !== 'rplanner:navigate') return;
+      const url = new URL(e.data.url, window.location.origin);
+      if (url.searchParams.get('action') === 'add') handleOpenForm();
+      else navigateToUrl(e.data.url);
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+  }, [isAuthenticated, handleOpenForm, navigateToUrl]);
+
+  const accountList = getAccountBalances();
+  const accountNames = accountList.map(a => a.name);
+
+  // ── Simpan transaksi ────────────────────────────────────────
+  const handleAddTransaction = async (input: AddTxInput) => {
     if (input.type === 'transfer') {
+      if (!input.toAccount || input.toAccount === input.account) {
+        toast.error(accountNames.length < 2 ? 'Tambahkan dompet kedua dulu di menu Dompet untuk transfer.' : 'Pilih dompet tujuan.');
+        return false;
+      }
       const sourceTx: TransactionInput = {
         type: 'expense',
         category: 'Transfer / Tarik Tunai',
@@ -131,86 +236,122 @@ function App() {
         description: `Transfer ke ${input.toAccount} (${input.description})`,
         account: input.account,
       };
-
       const destTx: TransactionInput = {
         type: 'income',
         category: 'Transfer / Tarik Tunai',
         amount: input.amount,
         description: `Transfer dari ${input.account} (${input.description})`,
-        account: input.toAccount || 'Cash', // Fallback if missing
+        account: input.toAccount,
       };
 
-      // Optimistic Update for both
-      const tempId1 = crypto.randomUUID();
-      const tempId2 = crypto.randomUUID();
-
-      const t1 = { ...sourceTx, id: tempId1, timestamp: new Date().toISOString(), status: 'pending' as const };
-      const t2 = { ...destTx, id: tempId2, timestamp: new Date().toISOString(), status: 'pending' as const };
-
-      addTransactionOptimistic(t1);
-      // Wait roughly before adding second to avoid identical timestamp collision if sorting relies on it strictly
-      addTransactionOptimistic(t2);
-
-      try {
-        await addTransaction(sourceTx);
-        await addTransaction(destTx);
-
-        const result = await fetchTransactions();
-        if (Array.isArray(result)) setTransactions(result);
-        else setTransactions(result.transactions);
-        return true;
-      } catch (err) {
-        console.error("Transfer failed", err);
-        removeTransactionOptimistic(tempId1);
-        removeTransactionOptimistic(tempId2);
-        toast.error("Gagal melakukan transfer.");
-        return false;
-      }
+      const now = new Date().toISOString();
+      const sentOut = navigator.onLine && (await addTransaction(sourceTx));
+      const sentIn = navigator.onLine && (await addTransaction(destTx));
+      // Sisi yang gagal masuk antrean offline; tidak ada transfer yang hilang setengah
+      if (!sentOut) enqueue({ ...sourceTx, timestamp: now });
+      if (!sentIn) enqueue({ ...destTx, timestamp: now });
+      if (!sentOut || !sentIn) toast.info('Belum tersambung. Transfer disimpan di HP dan dikirim otomatis saat online.');
+      await refreshData();
+      return true;
     }
 
-    // Normal Transaction Logic
     const tempId = crypto.randomUUID();
-    const tempTransaction = {
-      ...input,
-      id: tempId,
-      timestamp: new Date().toISOString(),
-      status: 'pending' as const
-    };
+    addTransactionOptimistic({ ...input, id: tempId, timestamp: input.timestamp ?? new Date().toISOString(), status: 'pending' });
 
-    addTransactionOptimistic(tempTransaction);
-
-    // 2. Call API
-    try {
-      const success = await addTransaction(input);
-      if (!success) {
-        throw new Error("Failed to save");
-      }
-      // Re-fetch to get consistent state
-      const result = await fetchTransactions();
-      if (Array.isArray(result)) {
-        setTransactions(result);
-      } else {
-        setTransactions(result.transactions);
-        if (result.metadata) setMetadata(result.metadata);
-      }
+    const ok = navigator.onLine && (await addTransaction(input));
+    if (ok) {
+      await refreshData();
       return true;
-    } catch (err) {
-      console.error("Failed to add transaction", err);
-      // Rollback
-      removeTransactionOptimistic(tempId);
-      toast.error("Gagal menyimpan transaksi. Cek koneksi internet.");
+    }
+
+    removeTransactionOptimistic(tempId);
+    if (input.externalId) {
+      // Draft otomatis: biarkan tetap di inbox supaya bisa dicoba lagi
+      toast.error('Gagal menyimpan. Draft tetap ada, coba lagi saat online.');
       return false;
     }
+    enqueue(input);
+    toast.info('Belum tersambung. Transaksi disimpan di HP dan dikirim otomatis saat online.');
+    await refreshData();
+    return true;
   };
 
-  // Goal Handlers
+  // ── Draft (catat otomatis) ──────────────────────────────────
+
+  const handleConfirmDraft = async (draft: TransactionDraft, value: DraftConfirmation) => {
+    const ok = await handleAddTransaction({
+      type: draft.type,
+      amount: draft.amount,
+      category: value.category,
+      account: value.account,
+      description: draft.merchant ?? `Dari ${draft.accountHint ?? 'notifikasi'}`,
+      timestamp: draft.occurredAt,
+      source: draft.source,
+      externalId: draft.externalId,
+    });
+    if (ok) {
+      // Kamu sudah memeriksa kategori & dompetnya → ingat untuk merchant ini
+      if (draft.merchant) learnMerchant(draft.merchant, value.category, value.account);
+      await removeDraft(draft.id);
+      toast.success('Tersimpan ke catatan.');
+    }
+    return ok;
+  };
+
+  const handleCreateDraft = async (parsed: ParsedBankText, raw: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { error } = await supabase.from('transaction_drafts').insert({
+      user_id: user.id,
+      source: 'share',
+      external_id: `share:${raw.length}:${Date.now()}`,
+      type: parsed.type,
+      amount: parsed.amount,
+      category: parsed.category,
+      account_hint: parsed.accountHint ?? null,
+      merchant: parsed.merchant ?? null,
+      confidence: parsed.confidence,
+    });
+    if (error) {
+      toast.error('Gagal membuat draft. Sudah jalankan migrasi database?');
+      return false;
+    }
+    return true;
+  };
+
+  // ── Edit / hapus transaksi ──────────────────────────────────
+  const handleUpdateTransaction = async (updated: Transaction, pair?: Transaction) => {
+    const ok = (await updateTransaction(updated)) && (!pair || (await updateTransaction(pair)));
+    if (!ok) {
+      toast.error('Perubahan gagal disimpan. Cek koneksi lalu coba lagi.');
+      return false;
+    }
+    const original = transactions.find(t => t.id === updated.id);
+    if (!pair && original && original.category !== updated.category && updated.description) {
+      learnMerchant(updated.description, updated.category);
+    }
+    await refreshData();
+    toast.success('Transaksi diperbarui.');
+    return true;
+  };
+
+  const handleDeleteTransactions = async (ids: string[]) => {
+    if (!(await deleteTransactions(ids))) {
+      toast.error('Gagal menghapus transaksi.');
+      return false;
+    }
+    await refreshData();
+    toast.success('Transaksi dihapus.');
+    return true;
+  };
+
+  // ── Goal & budget ───────────────────────────────────────────
   const handleOpenGoalForm = (goal?: Goal) => {
     setEditingGoal(goal);
     setIsGoalFormOpen(true);
   };
 
   const handleSaveGoal = async (goal: Goal) => {
-    // Optimistic Update
     if (editingGoal) {
       setGoals(goals.map(g => g.id === goal.id ? goal : g));
       await updateGoal(goal);
@@ -221,7 +362,6 @@ function App() {
   };
 
   const handleDeleteGoal = async (id: string) => {
-    // Optimistic Update
     setGoals(goals.filter(g => g.id !== id));
     await deleteGoal(id);
   };
@@ -231,12 +371,8 @@ function App() {
     await saveBudgetsApi(newBudgets);
   };
 
-  // Extract categories for Budget Settings (from existing transactions or predefined)
-  const availableCategories = Array.from(new Set(transactions.map(t => t.category)));
-  // Ensure default categories exist if no transactions
   const defaultCategories = ['Makan Weekday', 'Makan Weekend', 'Transport', 'Jajan/Hobi', 'Utilitas', 'Kos (Tabungan)'];
-  const allCategories = Array.from(new Set([...defaultCategories, ...availableCategories]));
-
+  const allCategories = Array.from(new Set([...defaultCategories, ...transactions.map(t => t.category)]));
 
   if (!isAuthenticated) {
     return (
@@ -247,236 +383,198 @@ function App() {
     );
   }
 
-  // Get Safety Buffer from Budgets (Special Category)
   const safetyBuffer = budgets.find(b => b.category === 'Dana Darurat (Safety Buffer)')?.limit || 0;
 
-  // Sync Logic: Get Seabank Balance
-  const seabankBalance = getSeabankBalance ? getSeabankBalance() : 0;
+  const openFeature = (id: string) => (id === 'analytics' ? setTab('analytics') : openView(id));
 
-  return (
-    <Layout activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setCurrentSubview(null); }} onFabClick={() => handleOpenForm()}>
-      <Toaster richColors closeButton position="top-center" />
-
-      {/* Home Tab */}
-      {activeTab === 'home' && (
-        currentSubview === 'investasi' ? (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm animate-in fade-in duration-200">
-            <div className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-              <button onClick={() => setCurrentSubview(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-                <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-              </button>
-              <h2 className="text-base font-bold text-gray-800 dark:text-white">Investasi & Aset</h2>
-            </div>
+  const renderHomeView = () => {
+    switch (view) {
+      case 'investasi':
+        return (
+          <div>
+            <SubviewHeader title="Investasi & aset" onBack={back} />
             <InvestmentView />
           </div>
-        ) : currentSubview === 'kebutuhan' ? (
-          <KebutuhanView
-            transactions={transactions}
-            budgets={budgets}
-            onOpenSettings={() => setIsBudgetSettingsOpen(true)}
-            onBack={() => setCurrentSubview(null)}
+        );
+      case 'kebutuhan':
+        return <KebutuhanView transactions={transactions} budgets={budgets} onOpenSettings={() => setIsBudgetSettingsOpen(true)} onBack={back} />;
+      case 'dompet':
+        return <DompetView onBack={back} onOpenTransactionForm={() => handleOpenForm()} onChanged={refreshData} />;
+      case 'ai_advisor':
+        return <AiAdvisorView onBack={back} />;
+      case 'utang':
+        return <DebtsView onBack={back} onChanged={refreshData} onRecordTransaction={handleAddTransaction} />;
+      case 'cicilan':
+        return <InstallmentsView onBack={back} onChanged={refreshData} onRecordTransaction={handleAddTransaction} />;
+      case 'impor':
+        return <ImportView onBack={back} onDone={async () => { await refreshData(); setTab('mutasi'); }} />;
+      case 'rekap':
+        return <YearReviewView onBack={back} />;
+      case 'tips':
+        return <TipsView onBack={back} />;
+      case 'deadlines':
+        return <DeadlinesView onBack={back} />;
+      case 'inbox':
+        return (
+          <DraftInbox
+            drafts={drafts}
+            accounts={accountList}
+            onConfirm={handleConfirmDraft}
+            onDismiss={d => removeDraft(d.id)}
+            onBack={back}
+            onOpenSetup={() => openView('notifikasi')}
           />
-        ) : currentSubview === 'dompet' ? (
-          <DompetView
-            onBack={() => setCurrentSubview(null)}
-            onOpenTransactionForm={() => handleOpenForm()}
-          />
-        ) : currentSubview === 'ai_advisor' ? (
-          <AiAdvisorView
-            onBack={() => setCurrentSubview(null)}
-          />
-        ) : currentSubview === 'goals' ? (
-          <div className="flex flex-col min-h-[80vh] bg-brimo-bg dark:bg-gray-900 transition-colors animate-in fade-in duration-200">
-            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setCurrentSubview(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-                  <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        );
+      case 'notifikasi':
+        return <NotificationCenter onBack={back} onCreateDraft={handleCreateDraft} />;
+      case 'goals':
+        return (
+          <div>
+            <SubviewHeader
+              title="Wishlist"
+              subtitle="Barang yang sedang kamu tabung"
+              onBack={back}
+              action={
+                <button onClick={() => handleOpenGoalForm()} className="h-11 px-4 rounded-xl bg-rp-action hover:bg-rp-action-press text-white text-sm font-semibold">
+                  Tambah
                 </button>
-                <div>
-                  <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                    <Target className="w-5 h-5 text-indigo-500" />
-                    Barang Harapan
-                  </h2>
-                  <p className="text-[10px] text-gray-400">Daftar wishlist impian Anda</p>
-                </div>
-              </div>
-              <button onClick={() => handleOpenGoalForm()} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition active:scale-95">
-                Tambah
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
+              }
+            />
+            <div className="space-y-4">
               {goals.map(goal => {
-                const isSeabankSync = goal.name.toLowerCase().includes('barang harapan') || goal.name.toLowerCase().includes('wishlist');
-                const displayAmount = isSeabankSync ? seabankBalance : goal.currentAmount;
-
                 return (
                   <GoalCard
                     key={goal.id}
                     title={goal.name}
-                    currentAmount={displayAmount}
+                    currentAmount={goal.linkedAccount ? getAccountBalance(goal.linkedAccount) : goal.currentAmount}
                     targetAmount={goal.targetAmount}
                     deadline={goal.deadline}
                     color={goal.color}
                     safetyBuffer={safetyBuffer}
                     onEdit={() => handleOpenGoalForm(goal)}
                   />
-                )
+                );
               })}
               {goals.length === 0 && (
-                <p className="text-xs text-gray-400 dark:text-gray-200 text-center py-8 italic bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">Belum ada barang harapan. Tambahkan sekarang!</p>
+                <div className="rp-card p-6 text-center">
+                  <p className="font-semibold text-rp-ink">Belum ada wishlist</p>
+                  <p className="mt-1 text-sm text-rp-ink-2">Tulis barang yang lagi kamu incar, Rplanner bantu hitung kapan uangnya cukup.</p>
+                </div>
               )}
             </div>
           </div>
-        ) : currentSubview === 'tips' ? (
-          <TipsView
-            onBack={() => setCurrentSubview(null)}
-          />
-        ) : currentSubview === 'deadlines' ? (
-          <DeadlinesView
-            onBack={() => setCurrentSubview(null)}
-          />
-        ) : (
-          <>
-            <AccountCards
-              onOpenTransactionForm={handleOpenForm}
-              onQuickPay={(category, type) => {
-                handleOpenForm({ category, type });
-              }}
-            />
+        );
+      default:
+        return null;
+    }
+  };
 
-            {/* Scan Resi Banner */}
-            <div className="px-1 mb-6">
-              <div 
-                onClick={() => toast.warning("Fitur Pindai Resi (Scan Receipt) sedang dikembangkan! (Still in Development)")}
-                className="relative overflow-hidden bg-gradient-to-r from-blue-600/10 to-indigo-600/10 dark:from-blue-500/5 dark:to-indigo-500/5 border border-blue-100/50 dark:border-blue-900/30 rounded-3xl p-5 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-300 group"
+  const homeView = tab === 'home' ? renderHomeView() : null;
+
+  return (
+    <AppLock>
+    <Layout
+      activeTab={tab}
+      onTabChange={setTab}
+      onFabClick={() => handleOpenForm()}
+      onOpenNotifications={() => openView(drafts.length ? 'inbox' : 'notifikasi')}
+      pendingCount={drafts.length}
+    >
+      <Toaster richColors closeButton position="top-center" />
+
+      {tab === 'home' && (homeView ?? (
+        <>
+          <AccountCards onOpenTransactionForm={handleOpenForm} onQuickPay={(category, type) => handleOpenForm({ category, type })} />
+
+          {drafts.length > 0 && (
+            <button
+              onClick={() => openView('inbox')}
+              className="w-full mb-6 rp-card p-4 flex items-center gap-3 text-left border-rp-action/40"
+            >
+              <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-rp-action flex items-center justify-center">
+                <Inbox className="w-5 h-5" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-sm font-semibold text-rp-ink">{drafts.length} transaksi terdeteksi</span>
+                <span className="block text-xs text-rp-ink-2">Dari notifikasi bank. Ketuk untuk cek & simpan.</span>
+              </span>
+              <span className="text-rp-action font-semibold text-sm">Cek</span>
+            </button>
+          )}
+
+          {showPushNudge && drafts.length === 0 && (
+            <div className="mb-6 rp-card p-4 flex items-start gap-3">
+              <span className="w-10 h-10 shrink-0 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center">
+                <BellRing className="w-5 h-5" />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-rp-ink">Biar nggak lupa bayar tagihan</p>
+                <p className="text-xs text-rp-ink-2 mt-0.5">Nyalakan notifikasi dan catat otomatis dari notifikasi bank.</p>
+                <button onClick={() => openView('notifikasi')} className="mt-2 h-9 px-3 rounded-lg bg-rp-surface-2 text-rp-royal text-xs font-semibold">
+                  Atur sekarang
+                </button>
+              </div>
+              <button
+                aria-label="Tutup"
+                onClick={() => { localStorage.setItem(NUDGE_KEY, '1'); setShowPushNudge(false); }}
+                className="-mt-1 -mr-1 w-9 h-9 flex items-center justify-center rounded-lg text-rp-ink-2 hover:bg-rp-surface-2"
               >
-                {/* Decorative background glow */}
-                <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-500" />
-                
-                <div className="flex items-center justify-between relative z-10">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
-                      <Camera className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 dark:text-white text-sm flex items-center gap-1.5">
-                        Pindai Resi / Struk Belanja
-                        <span className="text-[9px] bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-full">AI</span>
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Catat pengeluaran otomatis menggunakan kamera HP Anda</p>
-                    </div>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:text-blue-500 shadow-sm transition">
-                    <Scan className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
+                <X className="w-4 h-4" />
+              </button>
             </div>
+          )}
 
-            {/* Dashboard Menu Grid */}
-            <div className="px-1 mb-8">
-              <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-3 text-xs uppercase tracking-wide">Fitur Rplanner</h3>
-              <div className="grid grid-cols-4 gap-y-5 gap-x-2">
-                <button onClick={() => setCurrentSubview('investasi')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center border border-blue-100 dark:border-blue-900/50 text-blue-600 dark:text-blue-400 group-hover:scale-105 active:scale-95 transition">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Investasi</span>
+          <section className="mb-6" aria-labelledby="fitur-title">
+            <h2 id="fitur-title" className="rp-section-title mb-3">Fitur</h2>
+            <div className="grid grid-cols-4 gap-y-4 gap-x-2">
+              {FEATURES.filter(f => f.id !== 'ai_advisor' || AI_ENABLED).map(({ id, label, icon: Icon }) => (
+                <button key={id} onClick={() => openFeature(id)} className="flex flex-col items-center gap-1.5 rounded-xl py-1 active:scale-95 transition">
+                  <span className="w-12 h-12 rounded-2xl bg-rp-surface border border-rp-line text-rp-royal flex items-center justify-center">
+                    <Icon className="w-[22px] h-[22px]" strokeWidth={1.9} />
+                  </span>
+                  <span className="text-xs font-medium text-rp-ink text-center leading-tight">{label}</span>
                 </button>
-
-                <button onClick={() => setCurrentSubview('kebutuhan')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center border border-purple-100 dark:border-purple-900/50 text-purple-600 dark:text-purple-400 group-hover:scale-105 active:scale-95 transition">
-                    <Sliders className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Kebutuhan</span>
-                </button>
-
-                <button onClick={() => setCurrentSubview('dompet')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-green-50 dark:bg-green-950/30 flex items-center justify-center border border-green-100 dark:border-green-900/50 text-green-600 dark:text-green-400 group-hover:scale-105 active:scale-95 transition">
-                    <Wallet className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Dompet</span>
-                </button>
-
-                <button onClick={() => setCurrentSubview('ai_advisor')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center border border-orange-100 dark:border-orange-900/50 text-orange-600 dark:text-orange-400 group-hover:scale-105 active:scale-95 transition">
-                    <Sparkles className="w-5 h-5 fill-orange-500/10" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">AI Advisor</span>
-                </button>
-
-                <button onClick={() => setCurrentSubview('goals')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center border border-indigo-100 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 active:scale-95 transition">
-                    <Target className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Barang Harapan</span>
-                </button>
-
-                <button onClick={() => setCurrentSubview('tips')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center border border-yellow-100 dark:border-yellow-900/50 text-yellow-600 dark:text-yellow-400 group-hover:scale-105 active:scale-95 transition">
-                    <Lightbulb className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Tips Finansial</span>
-                </button>
-
-                <button onClick={() => setCurrentSubview('deadlines')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-pink-50 dark:bg-pink-950/30 flex items-center justify-center border border-pink-100 dark:border-pink-900/50 text-pink-600 dark:text-pink-400 group-hover:scale-105 active:scale-95 transition">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Tagihan</span>
-                </button>
-
-                <button onClick={() => setActiveTab('analytics')} className="flex flex-col items-center gap-1.5 group">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center border border-teal-100 dark:border-teal-900/50 text-teal-600 dark:text-teal-400 group-hover:scale-105 active:scale-95 transition">
-                    <PieChart className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 text-center leading-tight">Analisis</span>
-                </button>
-              </div>
+              ))}
             </div>
+          </section>
 
-            <div className="px-1 mb-6">
-              <FinancialSummary />
-              <SpendingProgress />
-              <AktivitasKalender transactions={transactions} />
-              <TransaksiTerbaru transactions={transactions} />
-            </div>
-          </>
-        )
-      )}
+          <div className="mb-6">
+            <FinancialSummary onSetPayday={() => setPaydayOpen(true)} />
+            <SpendingProgress />
+            <AktivitasKalender transactions={transactions} />
+            <TransaksiTerbaru transactions={transactions} />
+          </div>
+        </>
+      ))}
 
-      {/* Mutasi Tab */}
-      {activeTab === 'mutasi' && (
-        <div className="mt-4">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4 px-2">Mutasi Rekening</h2>
-          <TransactionList transactions={transactions} loading={storeLoading} />
+      {tab === 'mutasi' && (
+        <div>
+          <h1 className="text-xl font-bold text-rp-ink mb-4">Mutasi</h1>
+          <TransactionList transactions={transactions} loading={storeLoading} onSelect={setEditingTx} />
         </div>
       )}
 
-      {/* Investasi Tab */}
-      {activeTab === 'investasi' && <InvestmentView />}
-
-      {/* Analytics Tab */}
-      {activeTab === 'analytics' && (
-        <div className="mt-4">
-          <AnalyticsView transactions={transactions}>
-            <div className="mt-6">
-              <BudgetList
-                transactions={transactions}
-                budgets={budgets}
-                onOpenSettings={() => setIsBudgetSettingsOpen(true)}
-              />
-            </div>
-          </AnalyticsView>
-        </div>
+      {tab === 'analytics' && (
+        <>
+        <NetWorthCard />
+        <button onClick={() => openView('rekap')} className="w-full mb-6 rp-card p-4 flex items-center gap-3 text-left hover:bg-rp-surface-2">
+          <span className="w-10 h-10 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center"><CalendarRange className="w-5 h-5" /></span>
+          <span className="flex-1">
+            <span className="block text-sm font-semibold text-rp-ink">Rekap {new Date().getFullYear()}</span>
+            <span className="block text-xs text-rp-ink-2">Setahun uangmu: disisihkan, paling boros, langganan setia</span>
+          </span>
+        </button>
+        <AnalyticsView transactions={transactions}>
+          <div className="mt-6">
+            <BudgetList transactions={transactions} budgets={budgets} onOpenSettings={() => setIsBudgetSettingsOpen(true)} />
+          </div>
+        </AnalyticsView>
+        </>
       )}
 
-      {/* Akun Tab */}
-      {activeTab === 'akun' && (
-        <AccountProfile />
-      )}
+      {tab === 'akun' && <AccountProfile onOpenView={openView} onSetPayday={() => setPaydayOpen(true)} />}
 
-
+      {paydayOpen && <PaydaySheet onClose={() => setPaydayOpen(false)} />}
 
       <TransactionForm
         isOpen={isFormOpen}
@@ -484,7 +582,16 @@ function App() {
         initialData={formInitialData}
         onSubmit={handleAddTransaction}
         loading={storeLoading}
-        accounts={useFinanceStore.getState().getAccountBalances()}
+        accounts={getAccountBalances()}
+      />
+
+      <TransactionEditSheet
+        transaction={editingTx}
+        pair={editingTx ? findTransferPair(editingTx, transactions) : undefined}
+        accounts={accountNames}
+        onClose={() => setEditingTx(null)}
+        onSave={handleUpdateTransaction}
+        onDelete={handleDeleteTransactions}
       />
 
       <GoalForm
@@ -493,7 +600,7 @@ function App() {
         initialData={editingGoal}
         onSubmit={handleSaveGoal}
         onDelete={handleDeleteGoal}
-        defaultAmount="=summary!E4"
+        accounts={accountNames}
       />
 
       <BudgetSettings
@@ -503,8 +610,8 @@ function App() {
         categories={allCategories}
         onSave={handleSaveBudgets}
       />
-
     </Layout>
+    </AppLock>
   );
 }
 

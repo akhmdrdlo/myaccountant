@@ -58,14 +58,14 @@ export const TransaksiTerbaru = ({ transactions }: TransaksiTerbaruProps) => {
                                     </div>
                                     <div>
                                         <p className="text-xs font-bold text-gray-700 dark:text-gray-200 capitalize">{t.category}</p>
-                                        <p className="text-[9px] text-gray-400 dark:text-gray-500">{t.description || formattedDate}</p>
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{t.description || formattedDate}</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
                                     <p className={cn("text-xs font-bold", isExpense ? "text-red-500" : "text-green-500")}>
                                         {isExpense ? "-" : "+"}Rp {formatAmount(t.amount)}
                                     </p>
-                                    <p className="text-[9px] text-gray-400 dark:text-gray-500">{t.account}</p>
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-500">{t.account}</p>
                                 </div>
                             </div>
                         );

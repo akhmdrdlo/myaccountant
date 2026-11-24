@@ -67,17 +67,17 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mb-4 transition-colors">
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50 dark:bg-red-900/20" : "bg-indigo-50 dark:bg-indigo-900/20")}>
+                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50 dark:bg-red-900/20" : "bg-blue-50 dark:bg-blue-900/20")}>
                         {isRisky && canAfford ? (
                             <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                         ) : (
-                            <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         )}
                     </div>
                     <div>
                         <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{title}</h4>
                         {deadline && (
-                            <p className="text-[10px] text-gray-400">
+                            <p className="text-xs text-gray-400">
                                 Target: {(() => {
                                     try {
                                         const parsed = parseISO(deadline);
@@ -96,10 +96,10 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
                     </div>
                 </div>
                 <div className="text-right flex flex-col items-end">
-                    <button onClick={onEdit} className="text-[10px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-1">
+                    <button onClick={onEdit} className="text-xs text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 mb-1">
                         Edit
                     </button>
-                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{Math.round(percentage)}%</p>
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">{Math.round(percentage)}%</p>
                 </div>
             </div>
 
@@ -124,8 +124,8 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
                     <div className="bg-red-50 p-2 rounded-lg flex gap-2 items-start">
                         <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-[10px] font-bold text-red-700">Bahaya! Dana Menipis</p>
-                            <p className="text-[10px] text-red-600 leading-tight">
+                            <p className="text-xs font-bold text-red-700">Bahaya! Dana Menipis</p>
+                            <p className="text-xs text-red-600 leading-tight">
                                 Jika dibeli, sisa saldo hanya {formatCurrency(safeCurrent - targetAmount)}.
                                 Di bawah safety buffer {formatCurrency(safetyBuffer)}.
                             </p>
@@ -137,8 +137,8 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
                     <div className="bg-green-50 p-2 rounded-lg flex gap-2 items-start">
                         <ShieldCheck className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-[10px] font-bold text-green-700">Aman Dibeli!</p>
-                            <p className="text-[10px] text-green-600 leading-tight">
+                            <p className="text-xs font-bold text-green-700">Aman Dibeli!</p>
+                            <p className="text-xs text-green-600 leading-tight">
                                 Sisa saldo aman di atas buffer {formatCurrency(safetyBuffer)}.
                             </p>
                         </div>
@@ -147,12 +147,12 @@ export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-
 
                 {/* Forecasting */}
                 {showForecast && (
-                    <div className="bg-blue-50 p-2 rounded-lg flex gap-2 items-start">
+                    <div className="bg-rp-surface-2 p-2 rounded-lg flex gap-2 items-start">
                         <TrendingUp className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-[10px] font-bold text-blue-700">Tips Nabung</p>
-                            <p className="text-[10px] text-blue-600 leading-tight">
-                                Sisihkan <span className="font-bold">{formatCurrency(dailySaving)}/hari</span> selama {daysLeft} hari lagi.
+                            <p className="text-xs font-bold text-rp-royal">Biar tepat waktu</p>
+                            <p className="text-xs text-rp-ink leading-snug">
+                                {daysLeft > 45 ? (<>Sisihkan <span className="font-bold rp-num">{formatCurrency(Math.ceil(dailySaving * 30.44))}/bulan</span> selama {Math.ceil(daysLeft / 30.44)} bulan lagi.</>) : (<>Sisihkan <span className="font-bold rp-num">{formatCurrency(dailySaving)}/hari</span> selama {daysLeft} hari lagi.</>)}
                             </p>
                         </div>
                     </div>
