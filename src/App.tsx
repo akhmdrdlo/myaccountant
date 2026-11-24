@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Toaster, toast } from 'sonner';
-import { TrendingUp, Sliders, Wallet, Sparkles, Target, CalendarClock, CreditCard, HandCoins, Inbox, BellRing, X, CalendarRange, type LucideIcon } from 'lucide-react';
+import { TrendingUp, Sliders, Wallet, Sparkles, Target, CalendarClock, CreditCard, HandCoins, Inbox, BellRing, X, CalendarRange, ChevronRight, type LucideIcon } from 'lucide-react';
 
 import { Layout } from './components/layout/Layout';
 import { SubviewHeader } from './components/layout/SubviewHeader';
@@ -9,7 +9,6 @@ import { TransactionList } from './components/home/TransactionList';
 import { TransactionForm } from './components/home/TransactionForm';
 import { FinancialSummary } from './components/home/FinancialSummary';
 import { GoalCard } from './components/home/GoalCard';
-import { BudgetList } from './components/home/BudgetList';
 import { AnalyticsView } from './components/home/AnalyticsView';
 import { AccountProfile } from './components/account/AccountProfile';
 import { InvestmentView } from './components/home/InvestmentView';
@@ -17,7 +16,6 @@ import { AuthScreen } from './components/auth/AuthScreen';
 import { GoalForm } from './components/home/GoalForm';
 import { BudgetSettings } from './components/home/BudgetSettings';
 import { SpendingProgress } from './components/home/SpendingProgress';
-import { AktivitasKalender } from './components/home/AktivitasKalender';
 import { TransaksiTerbaru } from './components/home/TransaksiTerbaru';
 import { AiAdvisorView } from './components/home/AiAdvisorView';
 import { DompetView } from './components/home/DompetView';
@@ -413,7 +411,7 @@ function App() {
       case 'tips':
         return <TipsView onBack={back} />;
       case 'deadlines':
-        return <DeadlinesView onBack={back} />;
+        return <DeadlinesView onBack={back} onOpenView={openView} />;
       case 'inbox':
         return (
           <DraftInbox
@@ -451,6 +449,7 @@ function App() {
                     deadline={goal.deadline}
                     color={goal.color}
                     safetyBuffer={safetyBuffer}
+                    linkedAccount={goal.linkedAccount}
                     onEdit={() => handleOpenGoalForm(goal)}
                   />
                 );
@@ -491,7 +490,7 @@ function App() {
               onClick={() => openView('inbox')}
               className="w-full mb-6 rp-card p-4 flex items-center gap-3 text-left border-rp-action/40"
             >
-              <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-rp-action flex items-center justify-center">
+              <span className="w-10 h-10 rounded-xl bg-rp-warn-soft text-rp-action flex items-center justify-center">
                 <Inbox className="w-5 h-5" />
               </span>
               <span className="flex-1">
@@ -524,6 +523,8 @@ function App() {
             </div>
           )}
 
+          <FinancialSummary onSetPayday={() => setPaydayOpen(true)} />
+
           <section className="mb-6" aria-labelledby="fitur-title">
             <h2 id="fitur-title" className="rp-section-title mb-3">Fitur</h2>
             <div className="grid grid-cols-4 gap-y-4 gap-x-2">
@@ -539,10 +540,7 @@ function App() {
           </section>
 
           <div className="mb-6">
-            <FinancialSummary onSetPayday={() => setPaydayOpen(true)} />
-            <SpendingProgress />
-            <AktivitasKalender transactions={transactions} />
-            <TransaksiTerbaru transactions={transactions} />
+            <TransaksiTerbaru transactions={transactions} onSelect={setEditingTx} onSeeAll={() => setTab('mutasi')} />
           </div>
         </>
       ))}
@@ -565,9 +563,15 @@ function App() {
           </span>
         </button>
         <AnalyticsView transactions={transactions}>
-          <div className="mt-6">
-            <BudgetList transactions={transactions} budgets={budgets} onOpenSettings={() => setIsBudgetSettingsOpen(true)} />
-          </div>
+          <SpendingProgress />
+          <button onClick={() => openView('kebutuhan')} className="w-full rp-card p-4 flex items-center gap-3 text-left hover:bg-rp-surface-2">
+            <span className="w-10 h-10 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center"><Sliders className="w-5 h-5" /></span>
+            <span className="flex-1">
+              <span className="block text-sm font-semibold text-rp-ink">Budget per kategori</span>
+              <span className="block text-xs text-rp-ink-2">Lihat sisa jatah tiap kategori</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-rp-ink-2" />
+          </button>
         </AnalyticsView>
         </>
       )}

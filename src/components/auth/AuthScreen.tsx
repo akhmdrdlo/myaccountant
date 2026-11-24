@@ -151,7 +151,7 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
             <div className="w-full max-w-sm flex flex-col items-center z-10">
                 {/* Logo Area */}
-                <div className="mb-6 p-4 bg-white rounded-2xl shadow-rp-2">
+                <div className="mb-6 p-4 bg-rp-surface rounded-2xl shadow-rp-2">
                     <img src="/banklogo.png" alt="Logo" className="w-14 h-14 object-contain" onError={(e) => {
                         (e.target as HTMLImageElement).src = "https://ui-avatars.com/api/?name=Rplanner&background=0284c7&color=fff";
                     }} />
@@ -161,14 +161,14 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 <p className="text-blue-100 text-xs opacity-90 mb-8 text-center font-medium">Your Cash, Your Control.</p>
 
                 {/* Form Card */}
-                <div className="bg-white dark:bg-gray-900 w-full rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-gray-800 transition-colors">
+                <div className="bg-rp-surface w-full rounded-2xl p-6 shadow-rp-2 border border-rp-line transition-colors">
                     {/* Tabs */}
-                    <div className="flex gap-2 p-1 bg-gray-50 dark:bg-gray-950 rounded-xl mb-6 border border-gray-150 dark:border-gray-850">
+                    <div className="flex gap-2 p-1 bg-rp-canvas rounded-xl mb-6 border border-rp-line">
                         <button
                             onClick={() => { setIsLogin(true); setError(null); }}
                             className={cn(
                                 "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                isLogin ? "bg-white dark:bg-gray-800 text-rp-navy dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-800"
+                                isLogin ? "bg-rp-surface text-rp-navy shadow-rp-1" : "text-rp-ink-2 hover:text-rp-ink"
                             )}
                         >
                             Masuk
@@ -177,7 +177,7 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                             onClick={() => { setIsLogin(false); setError(null); }}
                             className={cn(
                                 "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                !isLogin ? "bg-white dark:bg-gray-800 text-rp-navy dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-800"
+                                !isLogin ? "bg-rp-surface text-rp-navy shadow-rp-1" : "text-rp-ink-2 hover:text-rp-ink"
                             )}
                         >
                             Daftar
@@ -186,7 +186,7 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
 
                     {/* Error Banner */}
                     {error && (
-                        <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl text-red-600 dark:text-red-400 text-xs font-semibold animate-shake">
+                        <div className="mb-4 p-3 bg-rp-out-soft border border-rp-line rounded-xl text-rp-out text-xs font-semibold animate-shake">
                             {error}
                         </div>
                     )}
@@ -194,32 +194,32 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Username */}
                         <div>
-                            <label className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Username</label>
+                            <label className="text-sm font-semibold text-rp-ink-2 mb-1 block">Username</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-rp-ink-2" />
                                 <input
                                     type="text"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder="Masukkan username..."
                                     required
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-rp-line bg-rp-surface text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-rp-ink"
                                 />
                             </div>
                         </div>
 
                         {/* Password */}
                         <div>
-                            <label className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Kata Sandi</label>
+                            <label className="text-sm font-semibold text-rp-ink-2 mb-1 block">Kata Sandi</label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-rp-ink-2" />
                                 <input
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
                                     required
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-rp-line bg-rp-surface text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-rp-ink"
                                 />
                             </div>
                         </div>
@@ -228,29 +228,29 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                         {!isLogin && (
                             <>
                                 <div>
-                                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1 block">Email (Opsional)</label>
+                                    <label className="text-sm font-semibold text-rp-ink-2 mb-1 block">Email (Opsional)</label>
                                     <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-rp-ink-2" />
                                         <input
                                             type="email"
                                             value={emailInput}
                                             onChange={(e) => setEmailInput(e.target.value)}
                                             placeholder="contoh@domain.com"
-                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-rp-line bg-rp-surface text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-rp-ink"
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1 block">No. Telepon (Opsional)</label>
+                                    <label className="text-sm font-semibold text-rp-ink-2 mb-1 block">No. Telepon (Opsional)</label>
                                     <div className="relative">
-                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-rp-ink-2" />
                                         <input
                                             type="tel"
                                             value={phoneInput}
                                             onChange={(e) => setPhoneInput(e.target.value)}
                                             placeholder="0812xxxxxx"
-                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-gray-900 dark:text-white"
+                                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-rp-line bg-rp-surface text-sm focus:outline-none focus:ring-2 focus:ring-rp-navy dark:focus:ring-blue-600 focus:border-transparent text-rp-ink"
                                         />
                                     </div>
                                 </div>
@@ -261,7 +261,7 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full mt-2 py-3 bg-blue-800 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-xl shadow-rp-2 dark:shadow-none flex items-center justify-center gap-2 transition active:scale-95 text-sm"
+                            className="w-full mt-2 py-3 bg-blue-800 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-xl shadow-rp-2 flex items-center justify-center gap-2 transition active:scale-95 text-sm"
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -276,8 +276,8 @@ export const AuthScreen = ({ onSuccess }: AuthScreenProps) => {
                 </div>
 
                 {/* Footer Security Info */}
-                <div className="mt-8 flex items-center gap-2 text-gray-600 dark:text-gray-400 text-xs">
-                    <ShieldCheck className="w-4 h-4 text-green-500" />
+                <div className="mt-8 flex items-center gap-2 text-rp-ink-2 text-xs">
+                    <ShieldCheck className="w-4 h-4 text-rp-in" />
                     <span>Data kamu hanya bisa dibaca akunmu sendiri (Supabase RLS)</span>
                 </div>
             </div>

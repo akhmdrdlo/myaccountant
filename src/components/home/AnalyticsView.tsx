@@ -1,256 +1,146 @@
 import { useMemo, type ReactNode } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { TrendingUp, AlertCircle, Activity } from 'lucide-react';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AlertCircle, Lightbulb } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
+import { inPeriod, isNeutralCategory } from '../../lib/period';
+import { categoryIcon } from '../../lib/categoryIcons';
+import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
 import type { Transaction } from '../../types';
-import { format, parseISO } from 'date-fns';
 
 interface AnalyticsViewProps {
     transactions: Transaction[];
     children?: ReactNode;
 }
 
-const COLORS = ['#0B3C7A', '#1F5FDB', '#5AB0E4', '#7C8FB0', '#B6C6DC', '#2E8C9A'];
-
+/** Analisis periode gajian berjalan: skor, insight, kategori terbesar, dan tren harian. */
 export const AnalyticsView = ({ transactions, children }: AnalyticsViewProps) => {
-    const { monthlyIncome, monthlyExpense, balance } = useFinanceStore();
+    const { monthlyIncome, monthlyExpense, period } = useFinanceStore();
 
-    // 0. Net Worth & Health Logic
-    // Health Score
-    const savingsRate = monthlyIncome > 0 ? (monthlyIncome - monthlyExpense) / monthlyIncome : 0;
-    const healthScore = monthlyIncome === 0
-        ? (balance > 0 ? 50 : 0)
-        : Math.min(100, Math.max(0, 60 + (savingsRate * 100)));
+    const savingsRate = monthlyIncome > 0 ? (monthlyIncome - monthlyExpense) / monthlyIncome : null;
+    const score = savingsRate === null ? null : Math.round(Math.min(100, Math.max(0, 60 + savingsRate * 100)));
+    const status = score === null ? null
+        : score >= 80 ? { label: 'Sangat sehat', tone: 'text-rp-in' }
+        : score >= 60 ? { label: 'Sehat', tone: 'text-rp-royal' }
+        : score >= 40 ? { label: 'Waspada', tone: 'text-rp-warn' }
+        : { label: 'Bahaya', tone: 'text-rp-out' };
 
-    const getHealthLabel = (score: number) => {
-        if (score >= 80) return { label: "Sangat Sehat", color: "text-green-500", bg: "bg-green-50 dark:bg-green-900/20" };
-        if (score >= 60) return { label: "Sehat", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20" };
-        if (score >= 40) return { label: "Waspada", color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20" };
-        return { label: "Bahaya", color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20" };
-    };
-    const healthStatus = getHealthLabel(healthScore);
+    const { categories, trend, spike } = useMemo(() => {
+        const expenses = transactions.filter(t => t.type === 'expense' && !isNeutralCategory(t.category) && inPeriod(t.timestamp, period));
+        const byCat = new Map<string, number>();
+        for (const t of expenses) byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount);
+        const categories = [...byCat].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
-
-    // 1. Prepare Data for Donut Chart (Category Proportion)
-    const categoryData = useMemo(() => {
-        // Exclude Transfer transactions
-        const expenses = transactions.filter(t =>
-            t.type === 'expense' &&
-            !['transfer / tarik tunai', 'penyesuaian saldo'].includes(t.category.toLowerCase())
-        );
-        const grouped: Record<string, number> = {};
-
-        expenses.forEach(t => {
-            if (!grouped[t.category]) grouped[t.category] = 0;
-            grouped[t.category] += t.amount;
+        // Satu titik per hari dari awal periode sampai hari ini (hari kosong = 0)
+        const days = period.dayIndex;
+        const trend = Array.from({ length: days }, (_, i) => {
+            const d = new Date(period.start.getFullYear(), period.start.getMonth(), period.start.getDate() + i);
+            const key = d.toDateString();
+            return {
+                name: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+                amount: expenses.filter(t => new Date(t.timestamp).toDateString() === key).reduce((s, t) => s + t.amount, 0),
+            };
         });
+        const avg = trend.reduce((s, d) => s + d.amount, 0) / (trend.filter(d => d.amount > 0).length || 1);
+        const spike = trend.length > 3 ? trend.filter(d => d.amount > avg * 3).sort((a, b) => b.amount - a.amount)[0] : undefined;
+        return { categories, trend, spike };
+    }, [transactions, period]);
 
-        // Top 5 categories + Others
-        const entries = Object.entries(grouped)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value);
-
-        if (entries.length > 5) {
-            const top5 = entries.slice(0, 5);
-            const others = entries.slice(5).reduce((acc, curr) => acc + curr.value, 0);
-            return [...top5, { name: 'Lainnya', value: others }];
-        }
-        return entries;
-    }, [transactions]);
-
-    // 2. Prepare Data for Trend Chart (Daily Expenses)
-    const trendData = useMemo(() => {
-        const expenses = transactions.filter(t => t.type === 'expense');
-        const grouped: Record<string, number> = {};
-
-        // Filter for current month (optional, but requested "Trend harian bulan ini")
-        // const now = new Date();
-        // const start = startOfMonth(now);
-        // const end = endOfMonth(now);
-
-        expenses.forEach(t => {
-            if (!t.timestamp) return;
-            const date = parseISO(t.timestamp);
-            const dayKey = format(date, 'dd MMM');
-            if (!grouped[dayKey]) grouped[dayKey] = 0;
-            grouped[dayKey] += t.amount;
-        });
-
-        // Re-approach: Group sorted transactions
-        const sortedTx = [...expenses].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        const finalGrouped: { name: string; amount: number; fullDate: string }[] = [];
-
-        sortedTx.forEach(t => {
-            const date = parseISO(t.timestamp);
-            const name = format(date, 'd MMM'); // e.g. "1 Des"
-            const last = finalGrouped[finalGrouped.length - 1];
-            if (last && last.name === name) {
-                last.amount += t.amount;
-            } else {
-                finalGrouped.push({ name, amount: t.amount, fullDate: t.timestamp });
-            }
-        });
-
-        // Limit to last 14 days or 30 days for readability
-        return finalGrouped.slice(-30);
-    }, [transactions]);
-
-    // 3. Insights
-    const insights = useMemo(() => {
-        if (categoryData.length === 0) return null;
-        const topCategory = categoryData.find(c =>
-            !['transfer / tarik tunai', 'penyesuaian saldo'].includes(c.name.toLowerCase())
-        ) || categoryData[0];
-
-        // Anomaly: Any day > 2x Average?
-        const total = trendData.reduce((acc, curr) => acc + curr.amount, 0);
-        const avg = total / (trendData.length || 1);
-        const anomaly = trendData.find(d => d.amount > avg * 3); // Spike > 3x avg
-
-        return {
-            topCategory,
-            anomaly
-        };
-    }, [categoryData, trendData]);
-
-    const formatCurrency = (val: number) => {
-        // Short format: 1.5jt, 500rb
-        if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}jt`;
-        if (val >= 1000) return `Rp ${(val / 1000).toFixed(0)}rb`;
-        return val.toString();
-    };
-
-    if (transactions.length === 0) {
-        return <div className="p-10 text-center text-gray-500">Belum ada data untuk analisis.</div>;
-    }
-
+    const top = categories[0];
+    const max = top?.value ?? 1;
 
     return (
-        <div className="pb-24 px-1">
-
-            <div className="bg-gradient-to-br from-blue-800 to-blue-600 rounded-2xl p-5 text-white shadow-lg mb-6">
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-white/20 rounded-full">
-                        <TrendingUp className="w-6 h-6 text-white" />
+        <div className="space-y-6 pb-4">
+            {/* Skor & insight dalam satu kartu */}
+            <section className="rp-card p-4">
+                <div className="flex items-center gap-4">
+                    <div className="relative w-14 h-14 shrink-0" aria-hidden>
+                        <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                            <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-rp-surface-2" />
+                            {score !== null && (
+                                <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" strokeLinecap="round"
+                                    className={cn('stroke-current', status?.tone)} strokeDasharray={`${(score / 100) * 97.4} 97.4`} />
+                            )}
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-rp-ink rp-num">{score ?? '–'}</span>
                     </div>
-                    <div>
-                        <h3 className="font-bold text-lg mb-1">Insight Bulanan</h3>
-                        <p className="text-sm text-brimo-100 leading-relaxed">
-                            Pengeluaran terbesar bulan ini adalah <span className="font-bold text-white bg-white/20 px-1 rounded">{insights?.topCategory.name}</span> ({formatCurrency(insights?.topCategory.value || 0)}).
+                    <div className="min-w-0">
+                        <p className="text-xs text-rp-ink-2">Skor periode {period.label}</p>
+                        <p className={cn('text-base font-bold', status?.tone ?? 'text-rp-ink')}>{status?.label ?? 'Belum ada pemasukan'}</p>
+                        <p className="text-xs text-rp-ink-2 rp-num">
+                            {savingsRate === null ? 'Skor dihitung dari pemasukan dan pengeluaran periode ini.' : `Tersisihkan ${Math.round(savingsRate * 100)}% dari pemasukan.`}
                         </p>
-                        {insights?.anomaly && (
-                            <div className="mt-3 flex items-center gap-2 bg-white/10 p-2 rounded-lg">
-                                <AlertCircle className="w-4 h-4 text-amber-300" />
-                                <p className="text-xs">
-                                    Spike pada <span className="font-bold">{insights.anomaly.name}</span> ({formatCurrency(insights.anomaly.amount)}). Cek detailnya.
-                                </p>
-                            </div>
+                    </div>
+                </div>
+                {(top || spike) && (
+                    <div className="mt-4 pt-3 border-t border-dashed border-rp-line space-y-2 text-sm">
+                        {top && (
+                            <p className="flex gap-2 text-rp-ink">
+                                <Lightbulb className="w-4 h-4 mt-0.5 text-rp-royal shrink-0" />
+                                <span>Paling banyak ke <b>{top.name}</b>: {formatRupiah(top.value)} ({Math.round((top.value / (monthlyExpense || 1)) * 100)}% pengeluaran).</span>
+                            </p>
+                        )}
+                        {spike && (
+                            <p className="flex gap-2 text-rp-ink">
+                                <AlertCircle className="w-4 h-4 mt-0.5 text-rp-warn shrink-0" />
+                                <span>Belanja tinggi pada {spike.name}: {formatRupiah(spike.amount)}.</span>
+                            </p>
                         )}
                     </div>
-                </div>
-            </div>
-            {/* Health Score Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 mb-6 flex items-center justify-between">
-                <div>
-                    <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Skor Keuangan</h4>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold text-gray-800 dark:text-white">{Math.round(healthScore)}</span>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${healthStatus.bg} ${healthStatus.color}`}>
-                            {healthStatus.label}
-                        </span>
+                )}
+            </section>
+
+            {/* Kategori: batang horizontal lebih mudah dibaca daripada donat */}
+            <section aria-labelledby="cat-title">
+                <h2 id="cat-title" className="rp-section-title mb-2">Ke mana uangnya</h2>
+                {categories.length === 0 ? (
+                    <p className="rp-card p-5 text-sm text-rp-ink-2 text-center">Belum ada pengeluaran di periode ini.</p>
+                ) : (
+                    <ul className="rp-card p-4 space-y-3">
+                        {categories.slice(0, 6).map((c, i) => {
+                            const Icon = categoryIcon(c.name);
+                            return (
+                                <li key={c.name} className="flex items-center gap-3">
+                                    <span className="w-8 h-8 shrink-0 rounded-lg bg-rp-surface-2 text-rp-royal flex items-center justify-center"><Icon className="w-4 h-4" /></span>
+                                    <span className="flex-1 min-w-0">
+                                        <span className="flex justify-between text-sm">
+                                            <span className="text-rp-ink truncate">{c.name}</span>
+                                            <span className="font-semibold text-rp-ink rp-num">{formatRupiahShort(c.value)}</span>
+                                        </span>
+                                        <span className="mt-1 block h-1.5 rounded-full bg-rp-surface-2 overflow-hidden">
+                                            <span className={cn('block h-full rounded-full', i === 0 ? 'bg-rp-navy' : 'bg-rp-sky')} style={{ width: `${(c.value / max) * 100}%` }} />
+                                        </span>
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </section>
+
+            {trend.length > 1 && (
+                <section aria-labelledby="trend-title">
+                    <h2 id="trend-title" className="rp-section-title mb-2">Pengeluaran harian</h2>
+                    <div className="rp-card p-3 h-48" aria-hidden>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={trend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#1F5FDB" stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor="#1F5FDB" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5E6F87' }} tickLine={false} axisLine={false} minTickGap={24} />
+                                <YAxis tick={{ fontSize: 11, fill: '#5E6F87' }} tickLine={false} axisLine={false} width={44}
+                                    tickFormatter={v => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}jt` : v >= 1000 ? `${Math.round(v / 1000)}rb` : String(v))} />
+                                <Tooltip formatter={v => [formatRupiah(Number(v ?? 0)), 'Keluar']} contentStyle={{ borderRadius: 12, border: '1px solid #DCE5F0', fontSize: 12 }} />
+                                <Area type="monotone" dataKey="amount" stroke="#1F5FDB" strokeWidth={2} fill="url(#trendFill)" isAnimationActive={false} />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                        Berdasarkan rasio tabungan bulan ini ({Math.round(savingsRate * 100)}%)
-                    </p>
-                </div>
-                <div className="h-16 w-16 relative flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-gray-100 dark:text-gray-700" />
-                        <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={175} strokeDashoffset={175 - (Math.min(healthScore, 100) / 100) * 175} className={healthStatus.color} strokeLinecap="round" />
-                    </svg>
-                    <Activity className={`w-6 h-6 absolute ${healthStatus.color}`} />
-                </div>
-            </div>
+                </section>
+            )}
 
-            {/* Donut Chart */}
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6 transition-colors">
-                <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4 text-sm">Proporsi Pengeluaran</h3>
-                <div className="h-[250px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={categoryData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {categoryData.map((_entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
-                                ))}
-                            </Pie>
-                            <Tooltip
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.9)' }}
-                                itemStyle={{ color: '#0F1E33' }}
-                                formatter={(value: any) => formatCurrency(Number(value) || 0)}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-                {/* Legend */}
-                <div className="flex flex-wrap gap-3 justify-center mt-2">
-                    {categoryData.map((entry, index) => (
-                        <div key={entry.name} className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{entry.name}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Trend Chart */}
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6 transition-colors">
-                <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4 text-sm">Tren Pengeluaran Harian</h3>
-                <div className="h-[200px] w-full -ml-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={trendData}>
-                            <defs>
-                                <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#1F5FDB" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#1F5FDB" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ccc" strokeOpacity={0.2} />
-                            <XAxis
-                                dataKey="name"
-                                tick={{ fontSize: 12, fill: '#5E6F87' }}
-                                tickLine={false}
-                                axisLine={false}
-                                minTickGap={20}
-                            />
-                            <YAxis
-                                tick={{ fontSize: 12, fill: '#5E6F87' }}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(val) => val >= 1000 ? `${val / 1000}k` : val}
-                            />
-                            <Tooltip
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.9)' }}
-                                itemStyle={{ color: '#0F1E33' }}
-                                formatter={(value: any) => formatCurrency(Number(value) || 0)}
-                            />
-                            <Area type="monotone" dataKey="amount" stroke="#1F5FDB" fillOpacity={1} fill="url(#colorAmount)" strokeWidth={3} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* Moved Content from Home */}
-            <div className="space-y-6">
-                {children}
-            </div>
+            {children}
         </div>
     );
 };

@@ -1,7 +1,7 @@
-import { Target, AlertTriangle, TrendingUp, ShieldCheck } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { differenceInDays, format, parseISO } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { Link2, Target } from 'lucide-react';
+import { differenceInDays, format } from 'date-fns';
+import { id as localeId } from 'date-fns/locale';
+import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
 
 interface GoalCardProps {
     title: string;
@@ -11,153 +11,67 @@ interface GoalCardProps {
     deadline?: string;
     onEdit?: () => void;
     safetyBuffer?: number;
+    linkedAccount?: string;
 }
 
-export const GoalCard = ({ title, currentAmount, targetAmount, color = "bg-blue-500", deadline, onEdit, safetyBuffer = 0 }: GoalCardProps) => {
-    // Safely parse current amount (handle string/formula)
-    const safeCurrent = isNaN(Number(currentAmount)) ? 0 : Number(currentAmount);
+/** Kartu wishlist ringkas: progres, sisa, dan satu saran yang paling berguna. */
+export const GoalCard = ({ title, currentAmount, targetAmount, deadline, onEdit, safetyBuffer = 0, linkedAccount }: GoalCardProps) => {
+    const current = Number(currentAmount) || 0;
+    const pct = targetAmount > 0 ? Math.min(100, Math.max(0, (current / targetAmount) * 100)) : 0;
+    const remaining = Math.max(0, targetAmount - current);
+    const reached = remaining === 0 && targetAmount > 0;
 
-    // 1. Basic Progress
-    const percentage = Math.min(100, Math.max(0, (safeCurrent / targetAmount) * 100));
+    const due = deadline ? new Date(deadline) : null;
+    const daysLeft = due && !isNaN(due.getTime()) ? differenceInDays(due, new Date()) : null;
 
-    // 2. Expert Safety Analysis
-    // Logic: Real buying power = Total Saldo - Safety Buffer.
-    // If Real Buying Power < Target, it's risky.
-    const realBuyingPower = safeCurrent - safetyBuffer;
-    // Removed unused safePercentage
-    const isRisky = realBuyingPower < targetAmount;
-    const canAfford = safeCurrent >= targetAmount;
-
-    // 3. Forecasting (Nabung Harian)
-    let dailySaving = 0;
-    let daysLeft = 0;
-    let showForecast = false;
-
-    if (deadline && targetAmount > safeCurrent) {
-        try {
-            // Handle deadline string (YYYY-MM-DD or ISO)
-            const today = new Date();
-            // Ensure we parse the date correctly even if it's just YYYY-MM-DD
-            const targetDate = new Date(deadline);
-
-            if (!isNaN(targetDate.getTime())) {
-                daysLeft = differenceInDays(targetDate, today);
-                if (daysLeft > 0) {
-                    const remaining = targetAmount - safeCurrent;
-                    dailySaving = Math.ceil(remaining / daysLeft);
-                    showForecast = true;
-                }
-            }
-        } catch (e) {
-            // Invalid date
-        }
+    // Satu baris saran, dipilih dari yang paling relevan
+    let hint: { text: string; tone: 'in' | 'warn' | 'ink' } | null = null;
+    if (reached) {
+        hint = linkedAccount && current - targetAmount < safetyBuffer
+            ? { text: `Sudah cukup, tapi sisa saldo jadi di bawah dana darurat ${formatRupiahShort(safetyBuffer)}.`, tone: 'warn' }
+            : { text: 'Uangnya sudah cukup.', tone: 'in' };
+    } else if (daysLeft !== null && daysLeft > 0) {
+        hint = daysLeft > 45
+            ? { text: `Sisihkan ${formatRupiah(Math.ceil(remaining / (daysLeft / 30.44)))}/bulan supaya tepat waktu.`, tone: 'ink' }
+            : { text: `Sisihkan ${formatRupiah(Math.ceil(remaining / daysLeft))}/hari supaya tepat waktu.`, tone: 'ink' };
+    } else if (daysLeft !== null && daysLeft <= 0) {
+        hint = { text: 'Target waktunya sudah lewat. Atur ulang tanggalnya?', tone: 'warn' };
     }
 
-    // Format currency
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
-
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mb-4 transition-colors">
-            <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-xl", isRisky && canAfford ? "bg-red-50 dark:bg-red-900/20" : "bg-blue-50 dark:bg-blue-900/20")}>
-                        {isRisky && canAfford ? (
-                            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                        ) : (
-                            <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        )}
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{title}</h4>
-                        {deadline && (
-                            <p className="text-xs text-gray-400">
-                                Target: {(() => {
-                                    try {
-                                        const parsed = parseISO(deadline);
-                                        if (isNaN(parsed.getTime())) {
-                                            const d = new Date(deadline);
-                                            if (isNaN(d.getTime())) return deadline;
-                                            return format(d, 'd MMMM yyyy', { locale: id });
-                                        }
-                                        return format(parsed, 'd MMMM yyyy', { locale: id });
-                                    } catch (e) {
-                                        return deadline;
-                                    }
-                                })()}
-                            </p>
-                        )}
-                    </div>
-                </div>
-                <div className="text-right flex flex-col items-end">
-                    <button onClick={onEdit} className="text-xs text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 mb-1">
-                        Edit
-                    </button>
-                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">{Math.round(percentage)}%</p>
-                </div>
+        <button onClick={onEdit} className="w-full rp-card p-4 text-left hover:bg-rp-surface-2 transition">
+            <div className="flex items-center gap-3">
+                {/* Cincin progres */}
+                <span className="relative w-12 h-12 shrink-0" aria-hidden>
+                    <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
+                        <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-rp-surface-2" />
+                        <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" strokeLinecap="round"
+                            className={reached ? 'stroke-rp-in' : 'stroke-rp-royal'}
+                            strokeDasharray={`${(pct / 100) * 97.4} 97.4`} />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center">
+                        {reached ? <Target className="w-4 h-4 text-rp-in" /> : <span className="text-[11px] font-bold text-rp-ink rp-num">{Math.round(pct)}%</span>}
+                    </span>
+                </span>
+
+                <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-rp-ink truncate">{title}</span>
+                    <span className="block text-xs text-rp-ink-2 rp-num">
+                        {formatRupiahShort(current)} dari {formatRupiahShort(targetAmount)}
+                        {due && !isNaN(due.getTime()) ? ` · ${format(due, 'd MMM yyyy', { locale: localeId })}` : ''}
+                    </span>
+                    {linkedAccount && (
+                        <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-rp-royal"><Link2 className="w-3 h-3" />{linkedAccount}</span>
+                    )}
+                </span>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2 relative">
-                {/* Visualizing Safety Buffer impact if affordable but risky */}
-                <div
-                    className={cn("h-full rounded-full transition-all duration-1000 ease-out", color)}
-                    style={{ width: `${percentage}%` }}
-                />
-            </div>
-
-            <div className="flex justify-between items-center text-xs mb-3">
-                <span className="text-gray-500 font-medium">{formatCurrency(safeCurrent)}</span>
-                <span className="text-gray-400">dari {formatCurrency(targetAmount)}</span>
-            </div>
-
-            {/* Expert Insights */}
-            <div className="space-y-2">
-                {/* Safety Analysis */}
-                {canAfford && isRisky && (
-                    <div className="bg-red-50 p-2 rounded-lg flex gap-2 items-start">
-                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-bold text-red-700">Bahaya! Dana Menipis</p>
-                            <p className="text-xs text-red-600 leading-tight">
-                                Jika dibeli, sisa saldo hanya {formatCurrency(safeCurrent - targetAmount)}.
-                                Di bawah safety buffer {formatCurrency(safetyBuffer)}.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {canAfford && !isRisky && (
-                    <div className="bg-green-50 p-2 rounded-lg flex gap-2 items-start">
-                        <ShieldCheck className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-bold text-green-700">Aman Dibeli!</p>
-                            <p className="text-xs text-green-600 leading-tight">
-                                Sisa saldo aman di atas buffer {formatCurrency(safetyBuffer)}.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Forecasting */}
-                {showForecast && (
-                    <div className="bg-rp-surface-2 p-2 rounded-lg flex gap-2 items-start">
-                        <TrendingUp className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-bold text-rp-royal">Biar tepat waktu</p>
-                            <p className="text-xs text-rp-ink leading-snug">
-                                {daysLeft > 45 ? (<>Sisihkan <span className="font-bold rp-num">{formatCurrency(Math.ceil(dailySaving * 30.44))}/bulan</span> selama {Math.ceil(daysLeft / 30.44)} bulan lagi.</>) : (<>Sisihkan <span className="font-bold rp-num">{formatCurrency(dailySaving)}/hari</span> selama {daysLeft} hari lagi.</>)}
-                            </p>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
+            {hint && (
+                <p className={cn('mt-3 pt-3 border-t border-dashed border-rp-line text-xs',
+                    hint.tone === 'in' ? 'text-rp-in' : hint.tone === 'warn' ? 'text-rp-warn' : 'text-rp-ink-2')}>
+                    {hint.text}
+                </p>
+            )}
+        </button>
     );
 };

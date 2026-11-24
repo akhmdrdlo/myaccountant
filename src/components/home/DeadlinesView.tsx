@@ -1,136 +1,185 @@
-import { ArrowLeft, Calendar, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { CalendarClock, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { SubscriptionTracker } from './SubscriptionTracker';
+import { useSupabase } from '../../hooks/useSupabase';
+import { SubviewHeader } from '../layout/SubviewHeader';
+import { Field, MoneyInput, PrimaryButton, Sheet, fieldClass } from '../common/Sheet';
+import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
+import type { Subscription } from '../../types';
 
 interface DeadlinesViewProps {
     onBack: () => void;
+    /** Buka layar cicilan / utang / wishlist dari item terkait */
+    onOpenView?: (view: string) => void;
 }
 
-export const DeadlinesView = ({ onBack }: DeadlinesViewProps) => {
-    const { subscriptions, goals } = useFinanceStore();
+type Kind = 'subscription' | 'installment' | 'debt' | 'goal';
+interface Item { key: string; kind: Kind; name: string; amount: number; date: Date; note: string; sub?: Subscription }
 
-    // 1. Format Subscriptions Deadlines (Monthly Recurring)
-    const formattedSubs = (subscriptions || []).map(sub => {
-        const today = new Date();
-        let targetMonth = today.getMonth();
-        let targetYear = today.getFullYear();
-        
-        // If billing date is passed for this month, target next month
-        if (today.getDate() > sub.billingDate) {
-            targetMonth += 1;
-            if (targetMonth > 11) {
-                targetMonth = 0;
-                targetYear += 1;
-            }
+const KIND_LABEL: Record<Kind, string> = { subscription: 'Langganan', installment: 'Cicilan', debt: 'Utang', goal: 'Wishlist' };
+const KIND_VIEW: Partial<Record<Kind, string>> = { installment: 'cicilan', debt: 'utang', goal: 'goals' };
+const SUB_CATEGORIES = ['Hiburan', 'Internet', 'Produktivitas', 'Rumah Tangga', 'Lainnya'];
+
+/** Tanggal "hari ke-N" berikutnya mulai hari ini; tanggal 31 di bulan pendek jatuh di hari terakhir. */
+function nextDate(day: number, from = new Date()): Date {
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    for (let k = 0; k < 2; k++) {
+        const last = new Date(today.getFullYear(), today.getMonth() + k + 1, 0).getDate();
+        const d = new Date(today.getFullYear(), today.getMonth() + k, Math.min(day, last));
+        if (d >= today) return d;
+    }
+    return today;
+}
+
+export const DeadlinesView = ({ onBack, onOpenView }: DeadlinesViewProps) => {
+    const { subscriptions, installments, debts, goals, period, getAccountBalance } = useFinanceStore();
+    const [editing, setEditing] = useState<Subscription | 'new' | null>(null);
+
+    const items = useMemo<Item[]>(() => {
+        const list: Item[] = [
+            ...subscriptions.map(s => ({ key: `s-${s.id}`, kind: 'subscription' as const, name: s.name, amount: s.amount, date: nextDate(s.billingDate), note: `tiap tgl ${s.billingDate}`, sub: s })),
+            ...installments.filter(i => i.paidMonths < i.totalMonths).map(i => ({
+                key: `i-${i.id}`, kind: 'installment' as const, name: i.name, amount: i.monthlyAmount, date: nextDate(i.dueDay), note: `ke-${i.paidMonths + 1} dari ${i.totalMonths}`,
+            })),
+            ...debts.filter(d => d.direction === 'owe' && !d.settledAt && d.dueDate).map(d => ({
+                key: `d-${d.id}`, kind: 'debt' as const, name: `Ke ${d.person}`, amount: d.amount, date: new Date(`${d.dueDate}T00:00`), note: d.note ?? 'utang',
+            })),
+            ...goals.filter(g => g.deadline).map(g => {
+                const cur = g.linkedAccount ? getAccountBalance(g.linkedAccount) : g.currentAmount;
+                return { key: `g-${g.id}`, kind: 'goal' as const, name: g.name, amount: Math.max(0, g.targetAmount - cur), date: new Date(`${g.deadline!.slice(0, 10)}T00:00`), note: 'sisa yang perlu dikumpulkan' };
+            }).filter(g => g.amount > 0 && !isNaN(g.date.getTime())),
+        ];
+        return list.sort((a, b) => a.date.getTime() - b.date.getTime());
+    }, [subscriptions, installments, debts, goals, getAccountBalance]);
+
+    const beforePayday = items.filter(i => i.date < period.end && i.kind !== 'goal');
+    const later = items.filter(i => !beforePayday.includes(i));
+    const dueTotal = beforePayday.reduce((s, i) => s + i.amount, 0);
+
+    return (
+        <div>
+            <SubviewHeader
+                title="Tagihan"
+                subtitle="Semua yang perlu dibayar, urut tanggal"
+                onBack={onBack}
+                action={
+                    <button onClick={() => setEditing('new')} className="h-11 px-4 rounded-xl bg-rp-action hover:bg-rp-action-press text-white text-sm font-semibold flex items-center gap-1.5">
+                        <Plus className="w-4 h-4" /> Langganan
+                    </button>
+                }
+            />
+
+            <section className="rp-card p-4 mb-5 flex items-center justify-between">
+                <div>
+                    <p className="text-sm text-rp-ink-2">Harus dibayar sebelum gajian</p>
+                    <p className="text-2xl font-bold text-rp-ink rp-num">{formatRupiah(dueTotal)}</p>
+                </div>
+                <p className="text-right text-xs text-rp-ink-2 rp-num">{beforePayday.length} tagihan<br />{period.daysLeft} hari lagi</p>
+            </section>
+
+            {items.length === 0 ? (
+                <div className="rp-card p-6 text-center">
+                    <CalendarClock className="w-8 h-8 mx-auto text-rp-ink-2" />
+                    <p className="mt-3 font-semibold text-rp-ink">Belum ada tagihan</p>
+                    <p className="mt-1 text-sm text-rp-ink-2">Tambahkan langganan seperti Netflix, internet, atau kos. Rplanner mencatatnya otomatis tiap bulan dan mengingatkan sehari sebelumnya.</p>
+                </div>
+            ) : (
+                <>
+                    {[{ title: 'Sebelum gajian', list: beforePayday }, { title: 'Setelahnya', list: later }].map(g => g.list.length > 0 && (
+                        <section key={g.title} className="mb-5">
+                            <h2 className="rp-section-title mb-2">{g.title}</h2>
+                            <ul className="rp-card divide-y divide-rp-line overflow-hidden">
+                                {g.list.map(it => {
+                                    const days = Math.round((it.date.getTime() - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
+                                    return (
+                                        <li key={it.key}>
+                                            <button
+                                                onClick={() => (it.sub ? setEditing(it.sub) : KIND_VIEW[it.kind] && onOpenView?.(KIND_VIEW[it.kind]!))}
+                                                className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-rp-surface-2 transition"
+                                            >
+                                                <span className={cn('w-11 h-11 shrink-0 rounded-xl flex flex-col items-center justify-center leading-none',
+                                                    days <= 1 ? 'bg-rp-warn-soft text-rp-warn' : 'bg-rp-surface-2 text-rp-royal')}>
+                                                    <span className="text-base font-bold rp-num">{it.date.getDate()}</span>
+                                                    <span className="text-[10px] font-semibold uppercase">{it.date.toLocaleDateString('id-ID', { month: 'short' })}</span>
+                                                </span>
+                                                <span className="flex-1 min-w-0">
+                                                    <span className="block text-sm font-semibold text-rp-ink truncate">{it.name}</span>
+                                                    <span className="block text-xs text-rp-ink-2 truncate">
+                                                        {KIND_LABEL[it.kind]} · {days === 0 ? 'hari ini' : days === 1 ? 'besok' : days < 0 ? 'lewat' : `${days} hari lagi`} · {it.note}
+                                                    </span>
+                                                </span>
+                                                <span className="text-sm font-bold text-rp-ink rp-num">{formatRupiahShort(it.amount)}</span>
+                                                <ChevronRight className="w-4 h-4 text-rp-ink-2 shrink-0" />
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </section>
+                    ))}
+                </>
+            )}
+
+            {editing && <SubscriptionSheet sub={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+        </div>
+    );
+};
+
+const SubscriptionSheet = ({ sub, onClose }: { sub?: Subscription; onClose: () => void }) => {
+    const { subscriptions, setSubscriptions } = useFinanceStore();
+    const { addSubscription, deleteSubscription } = useSupabase();
+    const [name, setName] = useState(sub?.name ?? '');
+    const [amount, setAmount] = useState<number | ''>(sub?.amount ?? '');
+    const [day, setDay] = useState(String(sub?.billingDate ?? new Date().getDate()));
+    const [category, setCategory] = useState(sub?.category ?? 'Hiburan');
+    const [busy, setBusy] = useState(false);
+
+    const save = async () => {
+        const d = Number(day);
+        if (!name.trim() || !amount) return toast.error('Isi nama dan nominal.');
+        if (!(d >= 1 && d <= 31)) return toast.error('Tanggal tagihan 1–31.');
+        setBusy(true);
+        const next: Subscription = { id: crypto.randomUUID(), name: name.trim(), amount, billingDate: d, category };
+        // Tidak ada endpoint update: ubah = hapus lama + tambah baru
+        if (sub) await deleteSubscription(sub.id);
+        const ok = await addSubscription(next);
+        setBusy(false);
+        if (!ok) return toast.error('Gagal menyimpan langganan.');
+        setSubscriptions([...subscriptions.filter(s => s.id !== sub?.id), next]);
+        onClose();
+    };
+
+    const remove = async () => {
+        if (!sub || !window.confirm(`Hapus langganan ${sub.name}?`)) return;
+        if (await deleteSubscription(sub.id)) {
+            setSubscriptions(subscriptions.filter(s => s.id !== sub.id));
+            onClose();
         }
-        
-        const targetDate = new Date(targetYear, targetMonth, sub.billingDate);
-        return {
-            type: 'Tagihan Rutin',
-            name: sub.name,
-            amount: sub.amount,
-            date: targetDate,
-            category: sub.category,
-            label: `Setiap tgl ${sub.billingDate}`
-        };
-    });
-
-    // 2. Format Goals Deadlines
-    const formattedGoals = (goals || [])
-        .filter(g => g.deadline)
-        .map(g => {
-            const date = new Date(g.deadline!);
-            return {
-                type: 'Target Impian',
-                name: g.name,
-                amount: typeof g.currentAmount === 'number' ? (g.targetAmount - g.currentAmount) : g.targetAmount,
-                date: isNaN(date.getTime()) ? new Date() : date,
-                category: 'Tabungan',
-                label: 'Jatuh Tempo'
-            };
-        });
-
-    // Merge & Sort chronologically
-    const allDeadlines = [...formattedSubs, ...formattedGoals].sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        }).format(val);
     };
 
     return (
-        <div className="flex flex-col min-h-[80vh] bg-rp-canvas dark:bg-gray-900 transition-colors">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-                        <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-                    </button>
-                    <div>
-                        <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Calendar className="w-5 h-5 text-blue-500" />
-                            Tagihan & Pembayaran
-                        </h2>
-                        <p className="text-xs text-gray-400">Kelola tagihan bulanan dan tanggal pembayaran terdekat</p>
-                    </div>
+        <Sheet title={sub ? 'Ubah langganan' : 'Langganan baru'} onClose={onClose}
+            footer={
+                <div className="flex gap-2">
+                    {sub && (
+                        <button onClick={remove} aria-label="Hapus" className="h-12 w-12 shrink-0 rounded-xl border border-rp-line text-rp-out flex items-center justify-center">
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    )}
+                    <PrimaryButton onClick={save} disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</PrimaryButton>
                 </div>
+            }>
+            <Field label="Nama"><input value={name} onChange={e => setName(e.target.value)} placeholder="mis. Netflix, IndiHome, Kos" className={fieldClass} /></Field>
+            <div className="grid grid-cols-3 gap-2">
+                <Field label="Nominal / bulan" className="col-span-2"><MoneyInput value={amount} onChange={setAmount} /></Field>
+                <Field label="Tanggal"><input inputMode="numeric" value={day} onChange={e => setDay(e.target.value.replace(/\D/g, '').slice(0, 2))} className={`${fieldClass} rp-num`} /></Field>
             </div>
-
-            {/* Content Body */}
-            <div className="p-4 space-y-6">
-                {/* Subscription Management */}
-                <SubscriptionTracker />
-
-                {/* Content Timeline */}
-                <div className="space-y-3">
-                    <h3 className="font-bold text-gray-700 dark:text-gray-200 text-xs uppercase tracking-wide px-1">Garis Waktu Jatuh Tempo</h3>
-                    <div className="space-y-3">
-                        {allDeadlines.map((item, idx) => {
-                            const isSub = item.type === 'Tagihan Rutin';
-                            return (
-                                <div key={idx} className="flex items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all relative">
-                                    <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-mono border ${
-                                        isSub 
-                                            ? 'border-blue-100 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' 
-                                            : 'border-blue-100 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800'
-                                    }`}>
-                                        <span className="text-[11px] font-bold uppercase text-gray-400">TGL</span>
-                                        <span className="text-sm font-bold">{item.date.getDate()}</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start mb-0.5">
-                                            <h4 className="font-bold text-sm text-gray-800 dark:text-white truncate">{item.name}</h4>
-                                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                                                isSub ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' : 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                                            }`}>
-                                                {item.type}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                                            <p className="font-semibold text-gray-600 dark:text-gray-300">{formatCurrency(item.amount)}</p>
-                                            <p className="text-xs text-gray-400">
-                                                {item.label}: {format(item.date, 'd MMM yyyy', { locale: id })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {allDeadlines.length === 0 && (
-                            <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-                                <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                                <p className="text-xs text-gray-400">Belum ada jadwal pembayaran atau target goals terdekat.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+            <Field label="Jenis" hint="Tercatat otomatis sebagai pengeluaran setiap bulan pada tanggalnya.">
+                <select value={category} onChange={e => setCategory(e.target.value)} className={fieldClass}>
+                    {SUB_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+            </Field>
+        </Sheet>
     );
 };

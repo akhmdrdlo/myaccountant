@@ -276,7 +276,7 @@ const Toggle = ({ label, hint, checked, onChange }: { label: string; hint?: stri
         </span>
         <span className="relative shrink-0">
             <input type="checkbox" role="switch" className="peer sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
-            <span className="block w-11 h-6 rounded-full bg-gray-300 dark:bg-gray-600 peer-checked:bg-rp-royal transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-rp-royal peer-focus-visible:ring-offset-2" />
+            <span className="block w-11 h-6 rounded-full bg-gray-300 peer-checked:bg-rp-royal transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-rp-royal peer-focus-visible:ring-offset-2" />
             <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
         </span>
     </label>

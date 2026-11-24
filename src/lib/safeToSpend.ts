@@ -64,7 +64,7 @@ export function computeSafeToSpend(input: {
     }
     for (const d of input.debts) {
         if (d.direction !== 'owe' || d.settledAt || !d.dueDate) continue;
-        const date = new Date(d.dueDate);
+        const date = new Date(`${d.dueDate}T00:00`);
         if (date < input.period.end) upcoming.push({ label: `Utang ke ${d.person}`, amount: d.amount, date, kind: 'debt' });
     }
     upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
