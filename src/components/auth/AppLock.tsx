@@ -39,7 +39,7 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
             <img src="/banklogo.png" alt="" className="w-12 h-12 object-contain" />
             <h1 className="mt-4 text-xl font-bold text-rp-ink">Rplanner terkunci</h1>
             <p className="mt-1 text-sm text-rp-ink-2">Buka dengan sidik jari, wajah, atau PIN layar HP-mu.</p>
-            <button onClick={tryUnlock} className="mt-8 w-20 h-20 rounded-3xl bg-rp-surface border border-rp-line text-rp-royal flex items-center justify-center shadow-rp-1 active:scale-95 transition" aria-label="Buka kunci">
+            <button onClick={tryUnlock} className="mt-8 w-20 h-20 rounded-2xl bg-rp-surface border border-rp-line text-rp-royal flex items-center justify-center shadow-rp-1 active:scale-95 transition" aria-label="Buka kunci">
                 <Fingerprint className="w-10 h-10" />
             </button>
             {failed && <p className="mt-4 text-sm text-rp-out">Belum berhasil. Ketuk ikon untuk coba lagi.</p>}

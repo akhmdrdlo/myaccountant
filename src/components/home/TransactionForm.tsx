@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
-import { X, Check, ArrowRightLeft, Settings, Camera } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Camera, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AI_ENABLED, AiError, aiReadReceipt } from '../../lib/ai';
-import { cn } from '../../lib/utils';
+import { cn, formatRupiah } from '../../lib/utils';
 import type { TransactionInput } from '../../types';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { institutionForAccount } from '../../lib/institutions';
 import { findRule } from '../../lib/merchantRules';
+import { categoryIcon } from '../../lib/categoryIcons';
 import { TagInput } from '../common/TagInput';
 import { InstitutionLogo } from '../common/InstitutionLogo';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../lib/categories';
@@ -20,94 +21,90 @@ interface TransactionFormProps {
     accounts?: { name: string; balance: number }[];
 }
 
-// Smart Category Mapping (Default Fallbacks)
+type FormType = 'expense' | 'income' | 'transfer' | 'adjustment';
+
+const TYPES: { id: FormType; label: string }[] = [
+    { id: 'expense', label: 'Keluar' },
+    { id: 'income', label: 'Masuk' },
+    { id: 'transfer', label: 'Transfer' },
+    { id: 'adjustment', label: 'Koreksi' },
+];
+
+// Tebakan kategori dari kata di catatan (dipakai bila belum ada aturan merchant)
 const KEYWORD_MAP: Record<string, string> = {
-    'makan': 'Makan Weekday',
-    'nasi': 'Makan Weekday',
-    'warteg': 'Makan Weekday',
-    'kfc': 'Makan Weekday',
-    'mcd': 'Makan Weekday',
-    'bakso': 'Makan Weekday',
-    'soto': 'Makan Weekday',
-    'kopi': 'Makan Weekday',
-    'gojek': 'Transport',
-    'goride': 'Transport',
-    'grab': 'Transport',
-    'bensin': 'Transport',
-    'parkir': 'Transport',
-    'tol': 'Transport',
-    'listrik': 'Utilitas',
-    'token': 'Utilitas',
-    'air': 'Utilitas',
-    'wifi': 'Utilitas',
-    'pulsa': 'Utilitas',
-    'snack': 'Jajan/Hobi',
-    'indomaret': 'Jajan/Hobi',
-    'alfamart': 'Jajan/Hobi',
-    'kos': 'Kos (Tabungan)',
+    makan: 'Makan Weekday', nasi: 'Makan Weekday', warteg: 'Makan Weekday', kfc: 'Makan Weekday', mcd: 'Makan Weekday',
+    bakso: 'Makan Weekday', soto: 'Makan Weekday', kopi: 'Makan Weekday',
+    gojek: 'Transport', goride: 'Transport', grab: 'Transport', bensin: 'Transport', parkir: 'Transport', tol: 'Transport',
+    listrik: 'Utilitas', token: 'Utilitas', wifi: 'Utilitas', pulsa: 'Utilitas',
+    snack: 'Jajan/Hobi', indomaret: 'Jajan/Hobi', alfamart: 'Jajan/Hobi', kos: 'Kos (Tabungan)', cicilan: 'Cicilan',
 };
 
-export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loading, accounts = [] }: TransactionFormProps) => {
-    const storeAccounts = useFinanceStore(state => state.accounts);
-    const storeExpenseCategories = useFinanceStore(state => state.expenseCategories);
-    const storeIncomeCategories = useFinanceStore(state => state.incomeCategories);
-    const merchantRules = useFinanceStore(state => state.merchantRules);
+const shortLabel = (c: string) => c.replace(' (Tabungan)', '').replace('Transfer / Tarik Tunai', 'Tarik tunai').replace('Makan ', 'Makan ');
 
-    const activeAccounts = storeAccounts && storeAccounts.length > 0
-        ? storeAccounts.map(a => a.name)
-        : ['Kantong Utama'];
+export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, accounts = [] }: TransactionFormProps) => {
+    const storeAccounts = useFinanceStore(s => s.accounts);
+    const storeExpense = useFinanceStore(s => s.expenseCategories);
+    const storeIncome = useFinanceStore(s => s.incomeCategories);
+    const merchantRules = useFinanceStore(s => s.merchantRules);
 
-    // Kategori aplikasi (sama dengan budget) didahulukan; kategori kustom pengguna ikut di belakang.
-    const activeExpenseCategories = [...new Set([...EXPENSE_CATEGORIES, ...(storeExpenseCategories ?? []).filter(c => !/^(Makanan & Minuman|Transportasi|Belanja|Hiburan|Tagihan)$/.test(c))])];
-    const activeIncomeCategories = [...new Set([...INCOME_CATEGORIES, ...(storeIncomeCategories ?? [])])];
+    const accountNames = storeAccounts.length ? storeAccounts.map(a => a.name) : ['Kantong Utama'];
+    const expenseCats = [...new Set([...EXPENSE_CATEGORIES, ...(storeExpense ?? []).filter(c => !/^(Makanan & Minuman|Transportasi|Belanja|Hiburan|Tagihan)$/.test(c))])]
+        .filter(c => c !== 'Transfer / Tarik Tunai');
+    const incomeCats = [...new Set([...INCOME_CATEGORIES, ...(storeIncome ?? [])])].filter(c => c !== 'Transfer / Tarik Tunai');
 
-    const [type, setType] = useState<'income' | 'expense' | 'transfer' | 'adjustment'>('expense');
-    const [amount, setAmount] = useState('');
+    const [type, setType] = useState<FormType>('expense');
+    const [amount, setAmount] = useState<number | ''>('');
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [account, setAccount] = useState('');
-    const [toAccount, setToAccount] = useState(''); // For Transfer
+    const [toAccount, setToAccount] = useState('');
+    const [showMore, setShowMore] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [scanning, setScanning] = useState(false);
+    const categoryTouched = useRef(false);
+    const amountRef = useRef<HTMLInputElement>(null);
 
-    // Reset/Prefill form when opened
+    // Isi awal setiap kali dibuka
     useEffect(() => {
-        if (isOpen) {
-            const defaultAcc = storeAccounts.find(a => institutionForAccount(a).kind === 'cash')?.name ?? activeAccounts[0] ?? '';
-            if (initialData) {
-                setType(initialData.type || 'expense');
-                setCategory(initialData.category || '');
-                setAmount(initialData.amount ? initialData.amount.toString() : '');
-                setDescription(initialData.description || '');
-                setTags(initialData.tags ?? []);
-                setAccount(initialData.account || defaultAcc);
-                setToAccount(initialData.toAccount || activeAccounts.find(a => a !== (initialData.account || defaultAcc)) || '');
-            } else {
-                setAccount(defaultAcc);
-                setToAccount(activeAccounts.find(a => a !== defaultAcc) || '');
-                setType('expense');
-                setAmount('');
-                setCategory('');
-                setDescription('');
-                setTags([]);
-            }
-        }
+        if (!isOpen) return;
+        const defaultAcc = storeAccounts.find(a => institutionForAccount(a).kind === 'cash')?.name ?? accountNames[0] ?? '';
+        const d = initialData ?? {};
+        setType((d.type as FormType) || 'expense');
+        setAmount(d.amount ? Math.round(d.amount) : '');
+        setCategory(d.category || '');
+        setDescription(d.description || '');
+        setTags(d.tags ?? []);
+        setAccount(d.account || defaultAcc);
+        setToAccount(d.toAccount || accountNames.find(a => a !== (d.account || defaultAcc)) || '');
+        setShowMore(Boolean(d.description || d.tags?.length));
+        categoryTouched.current = Boolean(d.category);
+        setTimeout(() => amountRef.current?.focus(), 250);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialData]);
 
-    // Pindai struk dengan Claude Haiku (vision)
-    const [scanning, setScanning] = useState(false);
+    // Saran kategori dari catatan: aturan yang dipelajari dulu, lalu kata kunci
+    useEffect(() => {
+        if (!isOpen || type !== 'expense' || categoryTouched.current || !description) return;
+        const learned = findRule(merchantRules, description);
+        if (learned) return setCategory(learned.category);
+        const lower = description.toLowerCase();
+        const hit = Object.entries(KEYWORD_MAP).find(([k]) => lower.includes(k));
+        if (hit) setCategory(hit[1]);
+    }, [description, type, isOpen, merchantRules]);
+
     const handleScanReceipt = async (file: File) => {
         setScanning(true);
         try {
             const receipt = await aiReadReceipt(file);
-            if (!receipt) {
-                toast.error('Struk tidak terbaca. Coba foto lebih dekat dan terang.');
-                return;
-            }
+            if (!receipt) return toast.error('Struk tidak terbaca. Coba foto lebih dekat dan terang.');
             setType('expense');
-            setAmount(String(receipt.total));
+            setAmount(receipt.total);
             setCategory(receipt.category);
+            categoryTouched.current = true;
             setDescription(receipt.merchant);
-            toast.success(`Terbaca ${receipt.merchant || 'struk'}: Rp${receipt.total.toLocaleString('id-ID')}. Cek lalu simpan.`);
+            setShowMore(true);
+            toast.success(`Terbaca ${receipt.merchant || 'struk'}: ${formatRupiah(receipt.total)}. Cek lalu simpan.`);
         } catch (err) {
             toast.error(err instanceof AiError ? err.message : 'Gagal membaca struk.');
         } finally {
@@ -115,294 +112,207 @@ export const TransactionForm = ({ isOpen, onClose, initialData, onSubmit, loadin
         }
     };
 
-    // Smart Category Logic
-    useEffect(() => {
-        if (!isOpen || type !== 'expense' || category !== '') return; // Only verify if category is empty or user hasn't manually set it? 
-        // Better: Only auto-set if the user is typing and found a match, but let's just do simple match
-
-        // 1) Kategori yang pernah kamu pilih untuk merchant ini
-        const learned = findRule(merchantRules, description);
-        if (learned) {
-            setCategory(learned.category);
-            return;
-        }
-        // 2) Tebakan kata kunci bawaan
-        const lowerDesc = description.toLowerCase();
-        for (const [key, cat] of Object.entries(KEYWORD_MAP)) {
-            if (lowerDesc.includes(key)) {
-                setCategory(cat);
-                break;
-            }
-        }
-    }, [description, type, isOpen, category, merchantRules]);
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!amount) return;
-        if (type !== 'transfer' && type !== 'adjustment' && !category) return;
-
-        let numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
-        let finalType = type;
-        let finalCategory = category;
-        let finalDescription = description;
-
-        // Smart Adjustment Logic
-        if (type === 'adjustment') {
-            const currentAccountData = accounts.find(a => a.name === account);
-            const currentBalance = currentAccountData?.balance || 0;
-            const targetBalance = numAmount; // User inputs the ACTUAL balance they have
-
-            const diff = targetBalance - currentBalance;
-
-            if (diff === 0) {
-                onClose(); // No change needed
-                return;
-            }
-
-            if (diff > 0) {
-                // Balance increased (Income)
-                finalType = 'income';
-                numAmount = diff;
-                finalCategory = 'Penyesuaian Saldo';
-                finalDescription = description || `Koreksi Saldo (+${new Intl.NumberFormat('id-ID').format(diff)})`;
-            } else {
-                // Balance decreased (Expense)
-                finalType = 'expense';
-                numAmount = Math.abs(diff); // Amount must be positive
-                finalCategory = 'Penyesuaian Saldo';
-                finalDescription = description || `Koreksi Saldo (-${new Intl.NumberFormat('id-ID').format(Math.abs(diff))})`;
-            }
-        } else if (type === 'transfer') {
-            finalCategory = 'Transfer';
-            finalDescription = description || `Transfer to ${toAccount}`;
+        if (!amount) return toast.error('Isi nominalnya dulu.');
+        if ((type === 'expense' || type === 'income') && !category) return toast.error('Pilih kategori dulu.');
+        if (type === 'transfer' && (!toAccount || toAccount === account)) {
+            return toast.error(accountNames.length < 2 ? 'Tambahkan dompet kedua dulu di menu Dompet.' : 'Pilih dompet tujuan.');
         }
 
-        const success = await onSubmit({
-            type: finalType as any, // 'adjustment' is handled above and converted
-            amount: numAmount,
+        let finalType: TransactionInput['type'] = type;
+        let finalAmount = amount;
+        let finalCategory = category;
+        let finalDescription = description.trim();
+
+        if (type === 'adjustment') {
+            // Pengguna mengisi saldo sebenarnya; yang dicatat adalah selisihnya
+            const current = accounts.find(a => a.name === account)?.balance ?? 0;
+            const diff = amount - current;
+            if (diff === 0) {
+                toast.info('Saldo sudah sama, tidak ada yang diubah.');
+                return onClose();
+            }
+            finalType = diff > 0 ? 'income' : 'expense';
+            finalAmount = Math.abs(diff);
+            finalCategory = 'Penyesuaian Saldo';
+            finalDescription ||= `Koreksi saldo ${diff > 0 ? '+' : '−'}${formatRupiah(Math.abs(diff))}`;
+        } else if (type === 'transfer') {
+            finalCategory = 'Transfer';
+        }
+
+        setSaving(true);
+        const ok = await onSubmit({
+            type: finalType,
+            amount: finalAmount,
             category: finalCategory,
             description: finalDescription,
             account,
             toAccount: type === 'transfer' ? toAccount : undefined,
             tags: type === 'expense' || type === 'income' ? tags : undefined,
         });
-
-        if (success) {
-            onClose();
-            setAmount('');
-            setDescription('');
-            setCategory('');
-            setType('expense'); // Reset to default
-        }
+        setSaving(false);
+        if (ok) onClose();
     };
+
+    const currentBalance = accounts.find(a => a.name === account)?.balance;
+    const tone = type === 'income' ? 'text-rp-in' : type === 'expense' ? 'text-rp-out' : 'text-rp-ink';
 
     return (
         <>
-            {/* Backdrop */}
-            {isOpen && (
-                <div
-                    className="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm transition-opacity"
-                    onClick={onClose}
-                />
-            )}
+            {isOpen && <div className="fixed inset-0 bg-black/40 z-[60]" onClick={onClose} />}
 
-            {/* Bottom Sheet */}
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Catat transaksi"
                 className={cn(
-                    "fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl p-6 z-[70] shadow-2xl transition-transform duration-300 ease-out transform max-w-md mx-auto h-[90vh] overflow-y-auto border-t border-gray-100 dark:border-gray-800",
-                    isOpen ? "translate-y-0" : "translate-y-full"
+                    'fixed inset-x-0 bottom-0 z-[70] max-w-md mx-auto bg-rp-surface rounded-t-3xl shadow-rp-2 max-h-[92vh] flex flex-col transition-transform duration-200 ease-out',
+                    isOpen ? 'translate-y-0' : 'translate-y-full pointer-events-none',
                 )}
             >
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-                        {type === 'adjustment' ? 'Penyesuaian Saldo' : 'Catat Transaksi'}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        {AI_ENABLED && <label
-                            className={cn(
-                                "h-11 px-3 flex items-center gap-1.5 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold cursor-pointer",
-                                scanning && "opacity-60 pointer-events-none"
-                            )}
-                        >
-                            <Camera className="w-4 h-4" />
-                            {scanning ? 'Membaca…' : 'Pindai struk'}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                className="sr-only"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    e.target.value = '';
-                                    if (file) handleScanReceipt(file);
-                                }}
-                            />
-                        </label>}
-                        <button
-                            onClick={onClose}
-                            aria-label="Tutup"
-                            className="w-11 h-11 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-                        >
-                            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                        </button>
-                    </div>
-                </div>
+                <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-rp-line" aria-hidden />
 
-                <form onSubmit={handleSubmit} className="space-y-5 pb-10">
-                    {/* Type Navigation */}
-                    <div className="grid grid-cols-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
-                        {[
-                            { id: 'expense', label: 'Keluar', color: 'text-red-600 dark:text-red-400' },
-                            { id: 'income', label: 'Masuk', color: 'text-green-600 dark:text-green-400' },
-                            { id: 'transfer', label: 'Transfer', color: 'text-blue-600 dark:text-blue-400', icon: ArrowRightLeft },
-                            { id: 'adjustment', label: 'Koreksi', color: 'text-blue-600 dark:text-blue-400', icon: Settings }
-                        ].map((t) => (
-                            <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => setType(t.id as any)}
-                                className={cn(
-                                    "min-h-[44px] px-1 text-[13px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
-                                    type === t.id
-                                        ? `bg-white dark:bg-gray-700 ${t.color} shadow-sm`
-                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                                )}
-                            >
-                                {t.icon && <t.icon className="w-3.5 h-3.5" />}
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Amount Input */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
-                            {type === 'adjustment' ? 'Saldo Sebenarnya Saat Ini' : 'Nominal'}
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">Rp</span>
-                            <input
-                                type="number"
-                                value={amount}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
-                                placeholder="0"
-                                className="w-full pl-10 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rp-navy/20 focus:border-rp-navy font-bold text-2xl text-gray-800 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                                required
-                                autoFocus
-                            />
-                        </div>
-                    </div>
-
-                    {/* Source Account Selector */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-2">
-                            {type === 'income' ? 'Masuk ke Akun' : type === 'adjustment' ? 'Akun yang Disesuaikan' : 'Sumber Dana'}
-                        </label>
-                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            {activeAccounts.map(acc => (
-                                <button
-                                    key={acc}
-                                    type="button"
-                                    onClick={() => setAccount(acc)}
-                                    className={cn(
-                                        "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
-                                        account === acc
-                                            ? "bg-blue-50 border-rp-navy text-rp-navy shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
-                                            : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
-                                    )}
-                                >
-                                    <InstitutionLogo institution={institutionForAccount(storeAccounts.find(a => a.name === acc) ?? { name: acc })} size="sm" className="!w-6 !h-6 !rounded-md !text-[8px]" />
-                                    <span className="text-xs font-medium">{acc}</span>
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+                    {/* Kepala: tipe + aksi */}
+                    <div className="flex items-center gap-2 px-4 pt-2">
+                        <div className="flex-1 grid grid-cols-4 p-1 bg-rp-surface-2 rounded-xl" role="tablist" aria-label="Jenis transaksi">
+                            {TYPES.map(t => (
+                                <button key={t.id} type="button" role="tab" aria-selected={type === t.id}
+                                    onClick={() => { setType(t.id); if (t.id !== type) { setCategory(''); categoryTouched.current = false; } }}
+                                    className={cn('h-9 rounded-lg text-[13px] font-semibold transition',
+                                        type === t.id ? 'bg-rp-surface text-rp-ink shadow-rp-1' : 'text-rp-ink-2')}>
+                                    {t.label}
                                 </button>
                             ))}
                         </div>
+                        <button type="button" onClick={onClose} aria-label="Tutup" className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl text-rp-ink-2 hover:bg-rp-surface-2">
+                            <X className="w-5 h-5" />
+                        </button>
                     </div>
 
-                    {/* Destination Account Selector (Transfer Only) */}
-                    {type === 'transfer' && (
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-2">
-                                Tujuan Transfer
-                            </label>
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                {activeAccounts.filter(a => a !== account).map(acc => (
-                                    <button
-                                        key={acc}
-                                        type="button"
-                                        onClick={() => setToAccount(acc)}
-                                        className={cn(
-                                            "px-4 py-2 rounded-xl border flex items-center gap-2 whitespace-nowrap transition-all",
-                                            toAccount === acc
-                                                ? "bg-blue-50 border-rp-navy text-rp-navy shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
-                                                : "bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
-                                        )}
-                                    >
-                                        <InstitutionLogo institution={institutionForAccount(storeAccounts.find(a => a.name === acc) ?? { name: acc })} size="sm" className="!w-6 !h-6 !rounded-md !text-[8px]" />
-                                        <span className="text-xs font-medium">{acc}</span>
-                                    </button>
-                                ))}
+                    <div className="flex-1 overflow-y-auto px-4 pb-4">
+                        {/* Nominal: fokus utama */}
+                        <label className="block pt-5 pb-4 text-center">
+                            <span className="block text-xs font-medium text-rp-ink-2">
+                                {type === 'adjustment' ? `Saldo ${account} sebenarnya` : 'Nominal'}
+                            </span>
+                            <span className={cn('mt-1 flex items-baseline justify-center gap-1 font-bold rp-num', tone)}>
+                                <span className="text-xl opacity-70">Rp</span>
+                                <input
+                                    ref={amountRef}
+                                    inputMode="numeric"
+                                    aria-label="Nominal"
+                                    value={amount === '' ? '' : amount.toLocaleString('id-ID')}
+                                    onChange={e => {
+                                        const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                        setAmount(digits ? Number(digits) : '');
+                                    }}
+                                    placeholder="0"
+                                    style={{ width: `${Math.max(1, (amount === '' ? 1 : amount.toLocaleString('id-ID').length)) + 0.5}ch` }}
+                                    className="bg-transparent text-[40px] leading-tight outline-none text-center placeholder:text-rp-line min-w-[2ch] max-w-full"
+                                />
+                            </span>
+                            {type === 'adjustment' && currentBalance !== undefined && (
+                                <span className="block text-xs text-rp-ink-2 rp-num">Tercatat sekarang {formatRupiah(currentBalance)}</span>
+                            )}
+                        </label>
+
+                        {/* Dompet */}
+                        <div className="flex items-center gap-2">
+                            <AccountPicker label={type === 'income' ? 'Ke' : 'Dari'} value={account} options={accountNames} onChange={setAccount} storeAccounts={storeAccounts} />
+                            {type === 'transfer' && (
+                                <>
+                                    <ArrowRight className="w-4 h-4 text-rp-ink-2 shrink-0" />
+                                    <AccountPicker label="Ke" value={toAccount} options={accountNames.filter(a => a !== account)} onChange={setToAccount} storeAccounts={storeAccounts} />
+                                </>
+                            )}
+                        </div>
+
+                        {/* Kategori */}
+                        {(type === 'expense' || type === 'income') && (
+                            <div className="mt-4 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Kategori">
+                                {(type === 'expense' ? expenseCats : incomeCats).map(cat => {
+                                    const Icon = categoryIcon(cat);
+                                    const active = category === cat;
+                                    return (
+                                        <button key={cat} type="button" role="radio" aria-checked={active}
+                                            onClick={() => { setCategory(cat); categoryTouched.current = true; }}
+                                            className={cn('flex flex-col items-center gap-1 rounded-xl py-2 px-1 border transition',
+                                                active ? 'border-rp-royal bg-rp-surface-2' : 'border-transparent hover:bg-rp-surface-2')}>
+                                            <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center',
+                                                active ? (type === 'income' ? 'bg-rp-in text-white' : 'bg-rp-royal text-white') : 'bg-rp-canvas text-rp-ink-2')}>
+                                                <Icon className="w-5 h-5" />
+                                            </span>
+                                            <span className={cn('text-[11px] leading-tight text-center line-clamp-2', active ? 'text-rp-ink font-semibold' : 'text-rp-ink-2')}>
+                                                {shortLabel(cat)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        </div>
-                    )}
-
-                    {/* Category Grid (Only for Income/Expense) */}
-                    {(type === 'expense' || type === 'income') && (
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-2">Kategori</label>
-                            <div className="flex flex-wrap gap-2">
-                                {(type === 'expense' ? activeExpenseCategories : activeIncomeCategories).map(cat => (
-                                    <button
-                                        key={cat}
-                                        type="button"
-                                        onClick={() => setCategory(cat)}
-                                        className={cn(
-                                            "px-3 py-1.5 text-xs rounded-full border transition-all",
-                                            category === cat
-                                                ? "bg-blue-50 border-rp-navy text-rp-navy font-medium dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
-                                                : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600"
-                                        )}
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Description */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Catatan (Opsional)</label>
-                        <input
-                            type="text"
-                            value={description}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
-                            placeholder={type === 'transfer' ? 'Berita transfer...' : type === 'adjustment' ? 'Keterangan koreksi...' : 'Makan siang...'}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rp-navy/20 focus:border-rp-navy text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                        />
-                    </div>
-
-                    {(type === 'expense' || type === 'income') && (
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500">Tag (opsional)</label>
-                            <TagInput value={tags} onChange={setTags} />
-                        </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-rp-action hover:bg-rp-action-press text-white font-semibold py-3.5 rounded-xl shadow-rp-2 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
-                    >
-                        {loading ? "Menyimpan..." : (
-                            <>
-                                <Check className="w-5 h-5" />
-                                {type === 'transfer' ? 'Kirim Uang' : type === 'adjustment' ? 'Update Saldo' : 'Simpan Transaksi'}
-                            </>
                         )}
-                    </button>
+
+                        {/* Catatan (selalu) + tag (dilipat) */}
+                        <input
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder={type === 'transfer' ? 'Catatan transfer (opsional)' : 'Catatan, mis. Kopi Kenangan'}
+                            className="mt-4 w-full h-11 px-3 rounded-xl bg-rp-canvas border border-rp-line text-sm text-rp-ink placeholder:text-rp-ink-2"
+                        />
+                        {(type === 'expense' || type === 'income') && (
+                            showMore ? (
+                                <div className="mt-3"><TagInput value={tags} onChange={setTags} /></div>
+                            ) : (
+                                <button type="button" onClick={() => setShowMore(true)} className="mt-2 h-9 inline-flex items-center gap-1 text-sm font-medium text-rp-royal">
+                                    Tambah tag <ChevronDown className="w-4 h-4" />
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    {/* Aksi bawah */}
+                    <div className="flex gap-2 px-4 pt-3 pb-safe border-t border-rp-line">
+                        {AI_ENABLED && type === 'expense' && (
+                            <label className={cn('h-12 px-3 shrink-0 flex items-center gap-1.5 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold cursor-pointer', scanning && 'opacity-60 pointer-events-none')}>
+                                <Camera className="w-5 h-5" />
+                                {scanning ? 'Membaca…' : 'Struk'}
+                                <input type="file" accept="image/*" capture="environment" className="sr-only"
+                                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleScanReceipt(f); }} />
+                            </label>
+                        )}
+                        <button type="submit" disabled={saving}
+                            className="flex-1 h-12 rounded-xl bg-rp-action hover:bg-rp-action-press text-white font-semibold disabled:opacity-60 active:scale-[0.98] transition">
+                            {saving ? 'Menyimpan…' : type === 'transfer' ? 'Pindahkan' : type === 'adjustment' ? 'Samakan saldo' : 'Simpan'}
+                        </button>
+                    </div>
                 </form>
             </div>
         </>
+    );
+};
+
+const AccountPicker = ({ label, value, options, onChange, storeAccounts }: {
+    label: string;
+    value: string;
+    options: string[];
+    onChange: (v: string) => void;
+    storeAccounts: { name: string; institution?: string }[];
+}) => {
+    const inst = institutionForAccount(storeAccounts.find(a => a.name === value) ?? { name: value || 'Lainnya' });
+    return (
+        <label className="relative flex-1 min-w-0 flex items-center gap-2 h-12 pl-2 pr-8 rounded-xl bg-rp-canvas border border-rp-line">
+            <InstitutionLogo institution={inst} size="sm" />
+            <span className="min-w-0">
+                <span className="block text-[11px] leading-none text-rp-ink-2">{label}</span>
+                <span className="block text-sm font-semibold text-rp-ink truncate">{value || 'Pilih dompet'}</span>
+            </span>
+            <ChevronDown className="absolute right-2.5 w-4 h-4 text-rp-ink-2 pointer-events-none" />
+            <select value={value} onChange={e => onChange(e.target.value)} aria-label={`Dompet ${label.toLowerCase()}`}
+                className="absolute inset-0 opacity-0 cursor-pointer">
+                {!options.includes(value) && <option value="">Pilih dompet</option>}
+                {options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+        </label>
     );
 };

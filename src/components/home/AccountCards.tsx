@@ -38,11 +38,11 @@ export const AccountCards = ({ onOpenTransactionForm, onQuickPay }: AccountCards
                 <div className="relative">
                     <button
                         onClick={() => setDropdownOpen(!dropdownOpen)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-200 shadow-sm active:scale-95 transition"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-rp-surface border border-rp-line rounded-xl text-xs font-semibold text-rp-ink shadow-rp-1 active:scale-95 transition"
                     >
-                        <Wallet className="w-3.5 h-3.5 text-blue-500" />
+                        <Wallet className="w-3.5 h-3.5 text-rp-royal" />
                         <span>{selectedWallet}</span>
-                        <ChevronDown className="w-3 h-3 text-gray-400" />
+                        <ChevronDown className="w-3 h-3 text-rp-ink-2" />
                     </button>
 
                     {dropdownOpen && (
@@ -54,16 +54,16 @@ export const AccountCards = ({ onOpenTransactionForm, onQuickPay }: AccountCards
                             />
                             
                             {/* Dropdown Menu */}
-                            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1.5 text-xs text-gray-700 dark:text-gray-200">
+                            <div className="absolute right-0 mt-1 w-56 bg-rp-surface border border-rp-line rounded-xl shadow-rp-2 z-50 py-1.5 text-xs text-rp-ink">
                                 <button
                                     onClick={() => {
                                         setSelectedWallet('Total Saldo');
                                         setDropdownOpen(false);
                                     }}
-                                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-rp-surface-2 transition-colors text-left"
                                 >
                                     <span className="font-medium">Total Saldo</span>
-                                    {selectedWallet === 'Total Saldo' && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                    {selectedWallet === 'Total Saldo' && <Check className="w-3.5 h-3.5 text-rp-royal" />}
                                 </button>
                                 
                                 {accounts.map((acc) => (
@@ -73,10 +73,10 @@ export const AccountCards = ({ onOpenTransactionForm, onQuickPay }: AccountCards
                                             setSelectedWallet(acc.name);
                                             setDropdownOpen(false);
                                         }}
-                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-rp-surface-2 transition-colors text-left"
                                     >
                                         <span className="flex items-center gap-2"><InstitutionLogo institution={institutionForAccount(acc)} size="sm" className="!w-6 !h-6 !rounded-md !text-[8px]" />{acc.name}</span>
-                                        {selectedWallet === acc.name && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                        {selectedWallet === acc.name && <Check className="w-3.5 h-3.5 text-rp-royal" />}
                                     </button>
                                 ))}
                             </div>

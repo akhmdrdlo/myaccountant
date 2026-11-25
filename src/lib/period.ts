@@ -45,4 +45,4 @@ export const inPeriod = (iso: string, p: Period) => {
 
 /** Kategori yang bukan pemasukan/pengeluaran sungguhan */
 export const isNeutralCategory = (category: string) =>
-    /^(transfer \/ tarik tunai|transfer|penyesuaian saldo|utang-piutang)$/i.test(category.trim());
+    /^(transfer \/ tarik tunai|transfer|penyesuaian saldo|utang-piutang|investasi)$/i.test(category.trim());

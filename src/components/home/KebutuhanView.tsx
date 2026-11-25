@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
-import { inPeriod } from '../../lib/period';
-import { useFinanceStore as usePeriodStore } from '../../store/useFinanceStore';
-import { ArrowLeft, Sliders, HelpCircle, Edit } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { Pencil, ShieldCheck, Sliders } from 'lucide-react';
+import { inPeriod, isNeutralCategory } from '../../lib/period';
+import { useFinanceStore } from '../../store/useFinanceStore';
+import { categoryIcon } from '../../lib/categoryIcons';
+import { SubviewHeader } from '../layout/SubviewHeader';
+import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
 import type { Transaction, Budget } from '../../types';
 
 interface KebutuhanViewProps {
@@ -12,160 +14,104 @@ interface KebutuhanViewProps {
     onBack: () => void;
 }
 
+const BUFFER = 'Dana Darurat (Safety Buffer)';
+
+const barTone = (pct: number) => (pct > 100 ? 'bg-rp-out' : pct >= 80 ? 'bg-rp-warn' : 'bg-rp-royal');
+
 export const KebutuhanView = ({ transactions, budgets, onOpenSettings, onBack }: KebutuhanViewProps) => {
+    const period = useFinanceStore(s => s.period);
 
-    const period = usePeriodStore(st => st.period);
-    const budgetStatus = useMemo(() => {
-
-        const expenses = transactions.filter(t => {
-            return t.type === 'expense' &&
-                inPeriod(t.timestamp, period);
-        });
-
-        const status: Record<string, { spent: number; limit: number; percent: number; color: string; icon: string }> = {};
-
-        // Default categories configuration if not in budgets state
-        const fallbackEmojis: Record<string, string> = {
-            'Makan Weekday': '🍔',
-            'Makan Weekend': '🍔',
-            'Transport': '🚌',
-            'Jajan/Hobi': '🛍️',
-            'Utilitas': '💡',
-            'Internet': '🌐',
-            'Dana Darurat (Safety Buffer)': '🛡️',
-            'Mama': '👩',
-            'Paket Data': '📱',
-            'Lainnya': '💵'
-        };
-
-        // Initialize with Limits from Prop
-        budgets.forEach(b => {
-            status[b.category] = {
-                spent: 0,
-                limit: b.limit,
-                percent: 0,
-                color: b.color || 'bg-blue-500', // Default color is purple (per reference)
-                icon: b.icon || fallbackEmojis[b.category] || '💵'
-            };
-        });
-
-        // Sum expenses
-        expenses.forEach(t => {
-            if (status[t.category]) {
-                status[t.category].spent += t.amount;
-            }
-        });
-
-        // Calculate percent
-        Object.keys(status).forEach(cat => {
-            if (status[cat].limit > 0) {
-                status[cat].percent = (status[cat].spent / status[cat].limit) * 100;
-            }
-        });
-
-        return status;
+    const { items, total, buffer } = useMemo(() => {
+        const spent = new Map<string, number>();
+        for (const t of transactions) {
+            if (t.type !== 'expense' || isNeutralCategory(t.category) || !inPeriod(t.timestamp, period)) continue;
+            spent.set(t.category, (spent.get(t.category) ?? 0) + t.amount);
+        }
+        const items = budgets
+            .filter(b => b.category !== BUFFER && b.limit > 0)
+            .map(b => {
+                const used = spent.get(b.category) ?? 0;
+                return { category: b.category, limit: b.limit, used, pct: (used / b.limit) * 100 };
+            })
+            .sort((a, b) => b.pct - a.pct);
+        const total = items.reduce((acc, i) => ({ used: acc.used + i.used, limit: acc.limit + i.limit }), { used: 0, limit: 0 });
+        return { items, total, buffer: budgets.find(b => b.category === BUFFER)?.limit ?? 0 };
     }, [transactions, budgets, period]);
 
-    // Calculate overall budget limits and spent
-    const overall = useMemo(() => {
-        let totalSpent = 0;
-        let totalLimit = 0;
-        Object.values(budgetStatus).forEach(b => {
-            totalSpent += b.spent;
-            totalLimit += b.limit;
-        });
-        const percent = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0;
-        return { spent: totalSpent, limit: totalLimit, percent };
-    }, [budgetStatus]);
-
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(amount);
-    };
+    const totalPct = total.limit > 0 ? (total.used / total.limit) * 100 : 0;
 
     return (
-        <div className="flex flex-col min-h-[80vh] bg-rp-canvas dark:bg-gray-900 transition-colors">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-                        <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        <div>
+            <SubviewHeader
+                title="Budget"
+                subtitle={`Periode ${period.label} · sisa ${period.daysLeft} hari`}
+                onBack={onBack}
+                action={
+                    <button onClick={onOpenSettings} className="h-11 px-4 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold flex items-center gap-1.5">
+                        <Pencil className="w-4 h-4" /> Atur
                     </button>
-                    <div>
-                        <h2 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-1.5">
-                            <Sliders className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            Kebutuhan Anggaran
-                        </h2>
-                        <p className="text-xs text-gray-400 font-medium">Batas limit belanja bulanan</p>
-                    </div>
+                }
+            />
+
+            {items.length === 0 ? (
+                <div className="rp-card p-6 text-center">
+                    <Sliders className="w-8 h-8 mx-auto text-rp-ink-2" />
+                    <p className="mt-3 font-semibold text-rp-ink">Belum ada budget</p>
+                    <p className="mt-1 text-sm text-rp-ink-2">Tentukan batas belanja per kategori, nanti Rplanner mengingatkan saat hampir habis.</p>
+                    <button onClick={onOpenSettings} className="mt-4 h-11 px-4 rounded-xl bg-rp-action text-white text-sm font-semibold">Atur budget</button>
                 </div>
-                <button
-                    onClick={onOpenSettings}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-lg border border-blue-100 dark:border-blue-900/50 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
-                >
-                    <Edit size={12} />
-                    Ubah
-                </button>
-            </div>
-
-            <div className="p-4 space-y-5">
-                {/* Overall Summary Card */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm transition-colors">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Total Penggunaan</span>
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{Math.round(overall.percent)}%</span>
-                    </div>
-                    {/* Purple bar */}
-                    <div className="w-full h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
-                        <div
-                            className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, overall.percent)}%` }}
-                        />
-                    </div>
-                    <div className="flex justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
-                        <span>Terpakai: Rp {formatCurrency(overall.spent)}</span>
-                        <span>Batas: Rp {formatCurrency(overall.limit)}</span>
-                    </div>
-                </div>
-
-                {/* Budget Items List */}
-                <div className="space-y-3">
-                    {Object.entries(budgetStatus).map(([category, data]) => (
-                        <div key={category} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm transition-colors flex flex-col gap-2">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">{data.icon}</span>
-                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{category}</span>
-                                </div>
-                                <span className={cn(
-                                    "text-xs font-bold",
-                                    data.percent > 100 ? "text-red-500" : "text-gray-500 dark:text-gray-400"
-                                )}>
-                                    {Math.round(data.percent)}%
-                                </span>
-                            </div>
-
-                            {/* Progress bar inside */}
-                            <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                <div
-                                    className={cn("h-full rounded-full transition-all duration-500", data.color)}
-                                    style={{ width: `${Math.min(100, data.percent)}%` }}
-                                />
-                            </div>
-
-                            <div className="flex justify-between text-[11px] text-gray-400 dark:text-gray-500">
-                                <span>Terpakai: Rp {formatCurrency(data.spent)}</span>
-                                <span>Batas: Rp {formatCurrency(data.limit)}</span>
-                            </div>
+            ) : (
+                <>
+                    <section className="rp-card p-4 mb-4">
+                        <div className="flex items-baseline justify-between">
+                            <p className="text-sm text-rp-ink-2">Terpakai</p>
+                            <p className="text-sm font-semibold text-rp-ink rp-num">{Math.round(totalPct)}%</p>
                         </div>
-                    ))}
-                    {Object.keys(budgetStatus).length === 0 && (
-                        <div className="text-center py-8 text-gray-400">
-                            <HelpCircle className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-bounce" />
-                            <p className="text-xs">Belum ada budget bulanan yang diatur.</p>
+                        <p className="text-2xl font-bold text-rp-ink rp-num">
+                            {formatRupiah(total.used)} <span className="text-sm font-medium text-rp-ink-2">/ {formatRupiahShort(total.limit)}</span>
+                        </p>
+                        <div className="mt-3 h-2 rounded-full bg-rp-surface-2 overflow-hidden">
+                            <div className={cn('h-full rounded-full', barTone(totalPct))} style={{ width: `${Math.min(100, totalPct)}%` }} />
                         </div>
-                    )}
-                </div>
-            </div>
+                    </section>
+
+                    <ul className="rp-card divide-y divide-rp-line overflow-hidden">
+                        {items.map(i => {
+                            const Icon = categoryIcon(i.category);
+                            const left = i.limit - i.used;
+                            return (
+                                <li key={i.category} className="p-4">
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-9 h-9 shrink-0 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center"><Icon className="w-[18px] h-[18px]" /></span>
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-sm font-semibold text-rp-ink truncate">{i.category}</span>
+                                            <span className={cn('block text-xs rp-num', left < 0 ? 'text-rp-out' : 'text-rp-ink-2')}>
+                                                {left < 0
+                                                    ? `Lewat ${formatRupiah(-left)}`
+                                                    : `Sisa ${formatRupiah(left)} · ${formatRupiahShort(Math.floor(left / period.daysLeft))}/hari`}
+                                            </span>
+                                        </span>
+                                        <span className="text-right text-xs text-rp-ink-2 rp-num">
+                                            <span className="block font-semibold text-rp-ink">{formatRupiahShort(i.used)}</span>
+                                            dari {formatRupiahShort(i.limit)}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2.5 h-1.5 rounded-full bg-rp-surface-2 overflow-hidden">
+                                        <div className={cn('h-full rounded-full', barTone(i.pct))} style={{ width: `${Math.min(100, i.pct)}%` }} />
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </>
+            )}
+
+            {buffer > 0 && (
+                <p className="mt-4 flex items-center gap-2 text-sm text-rp-ink-2">
+                    <ShieldCheck className="w-4 h-4 text-rp-in shrink-0" />
+                    Dana darurat {formatRupiah(buffer)} tidak dihitung sebagai jatah belanja.
+                </p>
+            )}
         </div>
     );
 };

@@ -1,468 +1,240 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { TrendingUp, TrendingDown, Plus, Wallet, Trash2, X, LineChart, RefreshCw } from 'lucide-react';
+import { LineChart, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { useSupabase } from '../../hooks/useSupabase';
 import { localDb } from '../../services/localDb';
-import { cn } from '../../lib/utils';
+import { Field, MoneyInput, PrimaryButton, Sheet, fieldClass } from '../common/Sheet';
+import { institutionForAccount } from '../../lib/institutions';
+import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
 import type { Investment } from '../../types';
 
-export const InvestmentView = () => {
-    const { investments, getInvestmentTotal, addTransactionOptimistic } = useFinanceStore();
-    const { addInvestment, updateInvestment, deleteInvestment, addTransaction } = useSupabase();
+const TYPES = ['Reksadana', 'Saham', 'Emas', 'Obligasi', 'Deposito', 'Kripto', 'Lainnya'];
+/** Kurs kasar USD→IDR untuk aset luar negeri dari Alpha Vantage */
+const USD_IDR = 16000;
 
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingInv, setEditingInv] = useState<Investment | undefined>(undefined);
-    const [loading, setLoading] = useState(false);
+interface Draft {
+    id?: string;
+    name: string;
+    symbol: string;
+    type: string;
+    averagePrice: number | '';
+    totalUnits: string;
+    currentPrice: number | '';
+}
+
+const emptyDraft = (): Draft => ({ name: '', symbol: '', type: 'Reksadana', averagePrice: '', totalUnits: '1', currentPrice: '' });
+
+export const InvestmentView = () => {
+    const { investments, getInvestmentTotal, accounts } = useFinanceStore();
+    const { addInvestment, updateInvestment, deleteInvestment, addTransaction } = useSupabase();
+    const [draft, setDraft] = useState<Draft | null>(null);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Form states
-    const [formData, setFormData] = useState<Partial<Investment>>({
-        type: 'Reksadana',
-        name: '',
-        symbol: '',
-        averagePrice: 0,
-        totalUnits: 1,
-        currentPrice: 0,
-        color: '#1F5FDB'
-    });
-
-    const [syncWithAccount, setSyncWithAccount] = useState(false);
-    const [selectedAccount, setSelectedAccount] = useState('Bank BTN');
-
-    const getAccountBalances = useFinanceStore(state => state.getAccountBalances);
-    const accounts = getAccountBalances();
-
     const totalValue = getInvestmentTotal();
-    const totalCost = investments.reduce((sum, inv) => sum + (inv.averagePrice * inv.totalUnits), 0);
-    const totalProfit = totalValue - totalCost;
-    const profitPercentage = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+    const totalCost = investments.reduce((s, i) => s + i.averagePrice * i.totalUnits, 0);
+    const profit = totalValue - totalCost;
+    const pct = totalCost > 0 ? (profit / totalCost) * 100 : 0;
 
-    const handleOpenForm = (inv?: Investment) => {
-        if (inv) {
-            setFormData(inv);
-            setEditingInv(inv);
-        } else {
-            setFormData({
-                type: 'Reksadana',
-                name: '',
-                symbol: '',
-                averagePrice: 0,
-                totalUnits: 1,
-                currentPrice: 0,
-                color: '#1F5FDB'
-            });
-            setEditingInv(undefined);
-        }
-        setSyncWithAccount(false);
-        setIsFormOpen(true);
-    };
-
-    // Alpha Vantage Price Refresh Handler
-    const handleRefreshPrices = async () => {
-        const metadata = (localDb.loadAllData().metadata || {}) as any;
+    const refreshPrices = async () => {
+        const metadata = (localDb.loadAllData().metadata || {}) as { alphaVantageKey?: string };
         const apiKey = metadata.alphaVantageKey || 'GWST0VV7BWSMK7AB';
-
-        const symbolsToRefresh = investments.filter(inv => inv.symbol && inv.symbol.trim() !== '');
-        if (symbolsToRefresh.length === 0) {
-            toast.error("Tidak ada aset dengan Kode/Simbol saham/crypto yang terdaftar!");
-            return;
-        }
+        const targets = investments.filter(i => i.symbol?.trim());
+        if (!targets.length) return toast.info('Isi kode saham/kripto di aset dulu (mis. BBCA.JK) supaya harganya bisa diperbarui.');
 
         setRefreshing(true);
-        let successCount = 0;
-        let failCount = 0;
-
-        for (const inv of symbolsToRefresh) {
+        let ok = 0;
+        let fail = 0;
+        for (const inv of targets) {
             try {
                 const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(inv.symbol!.trim())}&apikey=${apiKey}`);
                 const data = await res.json();
-                
-                if (data.Note) {
-                    console.warn("Alpha Vantage limit warning:", data.Note);
-                    toast.warning("Limit panggilan API Alpha Vantage tercapai. Coba lagi dalam beberapa menit.");
+                if (data.Note || data.Information) {
+                    toast.warning('Batas API Alpha Vantage tercapai. Coba lagi beberapa menit lagi.');
                     break;
                 }
-
-                const quote = data['Global Quote'];
-                if (quote && quote['05. price']) {
-                    let price = parseFloat(quote['05. price']);
-                    
-                    // If it is a USD asset (no .jk and price < 100000), convert to IDR
-                    if (!inv.symbol!.toLowerCase().endsWith('.jk') && price < 100000) {
-                        price = price * 16000;
-                    }
-
-                    const updatedInv = {
-                        ...inv,
-                        currentPrice: price
-                    };
-
-                    // Update store
-                    useFinanceStore.setState(state => ({
-                        investments: state.investments.map(i => i.id === inv.id ? updatedInv : i)
-                    }));
-
-                    // Update database
-                    await updateInvestment(updatedInv);
-                    successCount++;
-                } else {
-                    console.error("No quote data found for symbol:", inv.symbol);
-                    failCount++;
-                }
-            } catch (err) {
-                console.error("Failed to refresh price for symbol:", inv.symbol, err);
-                failCount++;
+                const raw = parseFloat(data['Global Quote']?.['05. price']);
+                if (!raw) { fail++; continue; }
+                const price = !inv.symbol!.toLowerCase().endsWith('.jk') && raw < 100_000 ? raw * USD_IDR : raw;
+                const updated = { ...inv, currentPrice: price };
+                useFinanceStore.setState(st => ({ investments: st.investments.map(i => (i.id === inv.id ? updated : i)) }));
+                await updateInvestment(updated);
+                ok++;
+            } catch {
+                fail++;
             }
-            // Micro-delay between requests
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(r => setTimeout(r, 500));
         }
-
         setRefreshing(false);
-        toast.success(`Selesai memperbarui harga!\n\n- Berhasil diperbarui: ${successCount} aset\n- Gagal: ${failCount} aset`);
+        toast.success(`Harga diperbarui: ${ok} aset${fail ? `, ${fail} gagal` : ''}.`);
     };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!formData.name) return;
-        setLoading(true);
-
-        const invPayload: Investment = {
-            id: editingInv?.id || crypto.randomUUID(),
-            name: formData.name,
-            symbol: formData.symbol || '',
-            type: formData.type || 'Lainnya',
-            averagePrice: Number(formData.averagePrice) || 0,
-            totalUnits: Number(formData.totalUnits) || 1,
-            currentPrice: Number(formData.currentPrice) || 0,
-            color: formData.color || '#1F5FDB'
-        };
-
-        try {
-            if (editingInv) {
-                useFinanceStore.setState(state => ({
-                    investments: state.investments.map(i => i.id === invPayload.id ? invPayload : i)
-                }));
-                await updateInvestment(invPayload);
-                toast.success(`Aset "${formData.name}" berhasil diperbarui!`);
-            } else {
-                useFinanceStore.setState(state => ({
-                    investments: [...state.investments, invPayload]
-                }));
-                await addInvestment(invPayload);
-
-                if (syncWithAccount) {
-                    const totalCostAdded = invPayload.averagePrice * invPayload.totalUnits;
-                    const txId = crypto.randomUUID();
-                    const tx = {
-                        id: txId,
-                        timestamp: new Date().toISOString(),
-                        type: 'expense' as const,
-                        category: 'Investasi',
-                        amount: totalCostAdded,
-                        description: `Beli ${invPayload.name}`,
-                        account: selectedAccount,
-                        status: 'pending' as const
-                    };
-                    addTransactionOptimistic(tx);
-                    await addTransaction(tx);
-                }
-                toast.success(`Aset "${formData.name}" berhasil ditambahkan!`);
-            }
-            setIsFormOpen(false);
-        } catch (error) {
-            console.error("Failed to save investment", error);
-            toast.error("Gagal menyimpan data investasi");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm("Hapus investasi ini?")) return;
-        setLoading(true);
-        try {
-            useFinanceStore.setState(state => ({
-                investments: state.investments.filter(i => i.id !== id)
-            }));
-            await deleteInvestment(id);
-        } catch (err) {
-            console.error("Delete failed", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const formatCurrency = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
     return (
-        <div className="pb-32 px-4 pt-4 dark:bg-gray-900 min-h-screen">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                    <LineChart className="w-6 h-6 text-rp-navy dark:text-blue-400" />
-                    Investasi
-                </h1>
-                <div className="flex gap-2">
-                    <button
-                        onClick={handleRefreshPrices}
-                        disabled={refreshing}
-                        className="flex items-center gap-1.5 bg-blue-50 text-blue-650 hover:bg-blue-100 dark:bg-blue-950/20 dark:text-blue-300 dark:hover:bg-blue-900/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-50"
-                    >
-                        <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
-                        Refresh Harga
-                    </button>
-                    <button
-                        onClick={() => handleOpenForm()}
-                        className="flex items-center gap-1 bg-blue-800 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
-                    >
-                        <Plus className="w-3.5 h-3.5" /> Tambah
-                    </button>
+        <div className="space-y-5">
+            <section className="relative overflow-hidden rounded-2xl bg-[#0B3C7A] text-white p-5 shadow-rp-2">
+                <div aria-hidden className="absolute -top-px right-0 w-32 h-full bg-[#1F5FDB]/40" style={{ clipPath: 'polygon(55% 0, 100% 0, 100% 70%, 20% 100%, 0 100%)' }} />
+                <div className="relative">
+                    <p className="text-sm text-white/80">Nilai portofolio</p>
+                    <p className="text-[32px] leading-tight font-bold rp-num">{formatRupiah(totalValue)}</p>
+                    <p className={cn('text-sm font-semibold rp-num', profit >= 0 ? 'text-[#7FE3B4]' : 'text-[#FFB4AA]')}>
+                        {profit >= 0 ? '+' : '−'}{formatRupiah(Math.abs(profit))} ({profit >= 0 ? '+' : '−'}{Math.abs(pct).toFixed(1)}%)
+                    </p>
+                    <p className="mt-3 pt-3 border-t border-dashed border-white/25 text-xs text-white/70 rp-num">Modal {formatRupiah(totalCost)}</p>
                 </div>
+            </section>
+
+            <div className="flex gap-2">
+                <button onClick={() => setDraft(emptyDraft())} className="flex-1 h-11 rounded-xl bg-rp-action hover:bg-rp-action-press text-white text-sm font-semibold flex items-center justify-center gap-1.5">
+                    <Plus className="w-4 h-4" /> Tambah aset
+                </button>
+                <button onClick={refreshPrices} disabled={refreshing} className="h-11 px-4 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                    <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} /> Harga
+                </button>
             </div>
 
-            {/* Summary Card */}
-            <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 mb-6 text-white shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-20">
-                    <LineChart className="w-24 h-24" />
+            {investments.length === 0 ? (
+                <div className="rp-card p-6 text-center">
+                    <LineChart className="w-8 h-8 mx-auto text-rp-ink-2" />
+                    <p className="mt-3 font-semibold text-rp-ink">Belum ada aset</p>
+                    <p className="mt-1 text-sm text-rp-ink-2">Catat reksadana, saham, atau emas supaya kekayaan bersihmu terhitung lengkap.</p>
                 </div>
-                <div className="relative z-10">
-                    <p className="text-blue-100 text-sm font-medium mb-1">Total Nilai Portofolio</p>
-                    <h2 className="text-3xl font-bold mb-4">{formatCurrency(totalValue)}</h2>
-
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-blue-100 text-xs mb-1">Modal Investasi</p>
-                            <p className="font-semibold">{formatCurrency(totalCost)}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-blue-100 text-xs mb-1">Return Keseluruhan</p>
-                            <div className={cn(
-                                "flex items-center gap-1 font-semibold",
-                                totalProfit >= 0 ? "text-green-300" : "text-red-300"
-                            )}>
-                                {totalProfit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                                {formatCurrency(Math.abs(totalProfit))} ({totalProfit >= 0 ? '+' : '-'}{Math.abs(profitPercentage).toFixed(2)}%)
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Investment List */}
-            <div className="space-y-4">
-                <h3 className="font-semibold text-gray-700 dark:text-gray-200">Aset Saya</h3>
-
-                {investments.length === 0 ? (
-                    <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-                        <Wallet className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                        <p className="text-gray-500 dark:text-gray-400 font-medium">Belum ada portofolio</p>
-                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Mulai catat investasi reksadana atau sahammu!</p>
-                    </div>
-                ) : (
-                    investments.map(inv => {
-                        const invValue = inv.currentPrice * inv.totalUnits;
-                        const invCost = inv.averagePrice * inv.totalUnits;
-                        const invProfit = invValue - invCost;
-
+            ) : (
+                <ul className="rp-card divide-y divide-rp-line overflow-hidden">
+                    {investments.map(inv => {
+                        const value = inv.currentPrice * inv.totalUnits;
+                        const p = value - inv.averagePrice * inv.totalUnits;
                         return (
-                            <div key={inv.id} onClick={() => handleOpenForm(inv)} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-rp-navy dark:hover:border-blue-500 transition-colors">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: inv.color || '#1F5FDB' }}>
-                                            {inv.symbol ? inv.symbol.substring(0, 2).toUpperCase() : inv.name.substring(0, 2).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-800 dark:text-gray-100">{inv.name}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {inv.type} • {inv.totalUnits} Unit {inv.symbol && `(${inv.symbol.toUpperCase()})`}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        <button onClick={(e) => handleDelete(inv.id, e)} className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
+                            <li key={inv.id}>
+                                <button onClick={() => setDraft({ ...inv, symbol: inv.symbol ?? '', totalUnits: String(inv.totalUnits) })}
+                                    className="w-full flex items-center gap-3 p-4 text-left hover:bg-rp-surface-2 transition">
+                                    <span className="w-10 h-10 shrink-0 rounded-xl bg-rp-surface-2 text-rp-royal flex items-center justify-center text-xs font-extrabold">
+                                        {(inv.symbol || inv.name).replace(/\.jk$/i, '').slice(0, 4).toUpperCase()}
+                                    </span>
+                                    <span className="flex-1 min-w-0">
+                                        <span className="block text-sm font-semibold text-rp-ink truncate">{inv.name}</span>
+                                        <span className="block text-xs text-rp-ink-2 truncate rp-num">{inv.type} · {inv.totalUnits.toLocaleString('id-ID')} unit</span>
+                                    </span>
+                                    <span className="text-right">
+                                        <span className="block text-sm font-bold text-rp-ink rp-num">{formatRupiahShort(value)}</span>
+                                        <span className={cn('block text-xs font-medium rp-num', p >= 0 ? 'text-rp-in' : 'text-rp-out')}>
+                                            {p >= 0 ? '+' : '−'}{formatRupiahShort(Math.abs(p))}
+                                        </span>
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
 
-                                <div className="flex justify-between items-end">
-                                    <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 font-sans">Harga Satuan: {formatCurrency(inv.currentPrice)}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Nilai Portofolio</p>
-                                        <p className="font-bold text-gray-800 dark:text-gray-100 text-base">{formatCurrency(invValue)}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 font-sans">Avg Cost: {formatCurrency(inv.averagePrice)}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Return</p>
-                                        <p className={cn(
-                                            "text-sm font-bold flex items-center justify-end gap-1",
-                                            invProfit >= 0 ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"
-                                        )}>
-                                            {invProfit >= 0 ? '+' : '-'}{formatCurrency(Math.abs(invProfit))}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })
-                )}
-            </div>
-
-            {/* Modal Form */}
-            {isFormOpen && (
-                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95">
-                        <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
-                            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                                {editingInv ? 'Edit Investasi' : 'Tambah Investasi'}
-                            </h2>
-                            <button onClick={() => setIsFormOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <div className="p-4 overflow-y-auto">
-                            <form id="investment-form" onSubmit={handleSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nama Aset (Produk)</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
-                                        placeholder="Contoh: Reksa Dana Sucorinvest"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Jenis Aset</label>
-                                        <select
-                                            value={formData.type}
-                                            onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
-                                        >
-                                            <option value="Reksadana" className="text-gray-800 bg-white">Reksadana</option>
-                                            <option value="Saham" className="text-gray-800 bg-white">Saham</option>
-                                            <option value="Crypto" className="text-gray-800 bg-white">Crypto</option>
-                                            <option value="SBN/Obligasi" className="text-gray-800 bg-white">SBN/Obligasi</option>
-                                            <option value="Emas" className="text-gray-800 bg-white">Emas</option>
-                                            <option value="Deposito" className="text-gray-800 bg-white">Deposito</option>
-                                            <option value="Lainnya" className="text-gray-800 bg-white">Lainnya</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kode / Simbol</label>
-                                        <input
-                                            type="text"
-                                            value={formData.symbol}
-                                            onChange={e => setFormData({ ...formData, symbol: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
-                                            placeholder="Ex: BBCA.JK atau BTCUSD"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div className="col-span-1">
-                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Jumlah Unit</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            step="any"
-                                            value={formData.totalUnits || ''}
-                                            onChange={e => setFormData({ ...formData, totalUnits: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
-                                            placeholder="Ex: 10"
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Avg Buy Price</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            value={formData.averagePrice || ''}
-                                            onChange={e => setFormData({ ...formData, averagePrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white"
-                                            placeholder="Avg per unit"
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Harga Saat Ini</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            value={formData.currentPrice || ''}
-                                            onChange={e => setFormData({ ...formData, currentPrice: Number(e.target.value) })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-rp-navy dark:text-white font-semibold text-rp-navy dark:text-blue-400"
-                                            placeholder="Per unit"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Dynamic Preview calculations */}
-                                <div className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                    <div>
-                                        <p className="mb-0.5">Total Modal Beli:</p>
-                                        <p className="text-gray-800 dark:text-gray-200 font-bold text-sm">
-                                            {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="mb-0.5">Total Nilai Sekarang:</p>
-                                        <p className="text-rp-navy dark:text-blue-400 font-bold text-sm">
-                                            {formatCurrency((formData.currentPrice || 0) * (formData.totalUnits || 0))}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {!editingInv && (
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={syncWithAccount}
-                                                onChange={e => setSyncWithAccount(e.target.checked)}
-                                                className="w-4 h-4 text-rp-navy rounded focus:ring-rp-navy"
-                                            />
-                                            <span className="text-sm font-medium text-blue-900 dark:text-blue-200">Catat Pembelian ke Mutasi Rekening</span>
-                                        </label>
-
-                                        {syncWithAccount && (
-                                            <div className="mt-3">
-                                                <label className="block text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">Sumber Rekening</label>
-                                                <select
-                                                    value={selectedAccount}
-                                                    onChange={e => setSelectedAccount(e.target.value)}
-                                                    className="w-full bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-sm outline-none dark:text-white"
-                                                >
-                                                    {accounts.map(a => <option key={a.name} value={a.name} className="text-gray-800 bg-white">{a.name}</option>)}
-                                                </select>
-                                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1.5 flex flex-col gap-0.5">
-                                                    <span>Transaksi jenis "Pengeluaran" sebesar {formatCurrency((formData.averagePrice || 0) * (formData.totalUnits || 0))} akan ditambahkan.</span>
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </form>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-100 dark:border-gray-800 pb-safe">
-                            <button
-                                type="submit"
-                                form="investment-form"
-                                disabled={loading}
-                                className="w-full bg-blue-800 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors active:scale-[0.98] disabled:opacity-50"
-                            >
-                                {loading ? 'Menyimpan...' : 'Simpan Investasi'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {draft && (
+                <InvestmentSheet
+                    draft={draft}
+                    accounts={accounts}
+                    onClose={() => setDraft(null)}
+                    onSave={async (inv, payFrom) => {
+                        const exists = investments.some(i => i.id === inv.id);
+                        useFinanceStore.setState(st => ({
+                            investments: exists ? st.investments.map(i => (i.id === inv.id ? inv : i)) : [...st.investments, inv],
+                        }));
+                        const ok = exists ? await updateInvestment(inv) : await addInvestment(inv);
+                        if (ok && !exists && payFrom) {
+                            const tx = {
+                                type: 'expense' as const,
+                                category: 'Investasi',
+                                amount: Math.round(inv.averagePrice * inv.totalUnits),
+                                description: `Beli ${inv.name}`,
+                                account: payFrom,
+                            };
+                            // Saldo dompet langsung berkurang di layar; data lengkap ikut termuat saat refresh berikutnya
+                            useFinanceStore.getState().addTransactionOptimistic({ ...tx, id: crypto.randomUUID(), timestamp: new Date().toISOString(), status: 'completed' });
+                            if (!(await addTransaction(tx))) toast.error('Aset tersimpan, tapi pengurangan saldo dompet gagal dicatat.');
+                        }
+                        if (!ok) toast.error('Gagal menyimpan aset.');
+                        else setDraft(null);
+                    }}
+                    onDelete={async (id) => {
+                        if (!window.confirm('Hapus aset ini? Transaksi pembeliannya tetap ada.')) return;
+                        useFinanceStore.setState(st => ({ investments: st.investments.filter(i => i.id !== id) }));
+                        await deleteInvestment(id);
+                        setDraft(null);
+                    }}
+                />
             )}
         </div>
+    );
+};
+
+const InvestmentSheet = ({ draft, accounts, onClose, onSave, onDelete }: {
+    draft: Draft;
+    accounts: { name: string; institution?: string }[];
+    onClose: () => void;
+    onSave: (inv: Investment, payFrom?: string) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
+}) => {
+    const [d, setD] = useState<Draft>(draft);
+    const [payFrom, setPayFrom] = useState('');
+    const [busy, setBusy] = useState(false);
+    const set = (patch: Partial<Draft>) => setD(prev => ({ ...prev, ...patch }));
+    const units = Number(d.totalUnits.replace(',', '.')) || 0;
+    const cost = (Number(d.averagePrice) || 0) * units;
+
+    const save = async () => {
+        if (!d.name.trim()) return toast.error('Isi nama aset.');
+        if (!units) return toast.error('Jumlah unit harus lebih dari 0.');
+        setBusy(true);
+        await onSave({
+            id: d.id ?? crypto.randomUUID(),
+            name: d.name.trim(),
+            symbol: d.symbol.trim().toUpperCase() || undefined,
+            type: d.type,
+            averagePrice: Number(d.averagePrice) || 0,
+            totalUnits: units,
+            currentPrice: Number(d.currentPrice) || Number(d.averagePrice) || 0,
+        }, payFrom || undefined);
+        setBusy(false);
+    };
+
+    return (
+        <Sheet title={d.id ? 'Ubah aset' : 'Tambah aset'} onClose={onClose}
+            footer={
+                <div className="flex gap-2">
+                    {d.id && (
+                        <button onClick={() => onDelete(d.id!)} aria-label="Hapus aset" className="h-12 w-12 shrink-0 rounded-xl border border-rp-line text-rp-out flex items-center justify-center">
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    )}
+                    <PrimaryButton onClick={save} disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</PrimaryButton>
+                </div>
+            }>
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1" role="radiogroup" aria-label="Jenis aset">
+                {TYPES.map(t => (
+                    <button key={t} role="radio" aria-checked={d.type === t} onClick={() => set({ type: t })}
+                        className={cn('h-9 px-3 shrink-0 rounded-full text-xs font-semibold border transition',
+                            d.type === t ? 'bg-rp-royal border-rp-royal text-white' : 'border-rp-line text-rp-ink-2')}>
+                        {t}
+                    </button>
+                ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                <Field label="Nama" className="col-span-2"><input value={d.name} onChange={e => set({ name: e.target.value })} placeholder="mis. Bank BCA" className={fieldClass} /></Field>
+                <Field label="Kode"><input value={d.symbol} onChange={e => set({ symbol: e.target.value })} placeholder="BBCA.JK" className={`${fieldClass} uppercase`} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <Field label="Harga beli rata-rata"><MoneyInput value={d.averagePrice} onChange={v => set({ averagePrice: v })} /></Field>
+                <Field label="Jumlah unit"><input inputMode="decimal" value={d.totalUnits} onChange={e => set({ totalUnits: e.target.value.replace(/[^0-9.,]/g, '') })} className={`${fieldClass} rp-num`} /></Field>
+            </div>
+            <Field label="Harga sekarang" hint="Kosongkan untuk memakai harga beli. Tombol Harga memperbarui otomatis untuk aset yang punya kode.">
+                <MoneyInput value={d.currentPrice} onChange={v => set({ currentPrice: v })} />
+            </Field>
+            {!d.id && (
+                <Field label="Dibayar dari dompet" hint={cost ? `${formatRupiah(cost)} pindah dari dompet ke aset. Tidak dihitung sebagai pengeluaran.` : undefined}>
+                    <select value={payFrom} onChange={e => setPayFrom(e.target.value)} className={fieldClass}>
+                        <option value="">Jangan kurangi saldo dompet</option>
+                        {accounts.filter(a => institutionForAccount(a).kind !== 'paylater').map(a => <option key={a.name}>{a.name}</option>)}
+                    </select>
+                </Field>
+            )}
+        </Sheet>
     );
 };
