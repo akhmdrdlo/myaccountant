@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { disablePush, enablePush, getCurrentSubscription, getPushSupport, isIOS, sendTestPush } from '../../lib/push';
 import { parseBankText, type ParsedBankText } from '../../lib/parseBankText';
 import { AI_ENABLED, AiError, aiParse } from '../../lib/ai';
+import { buildAutoxScript } from '../../lib/autoxScript';
 import { SubviewHeader } from '../layout/SubviewHeader';
 import { cn, formatRupiah } from '../../lib/utils';
 
@@ -203,7 +204,30 @@ export const NotificationCenter = ({ onBack, onCreateDraft }: NotificationCenter
                     <CopyField value={INGEST_URL} />
                 </div>
 
-                <Guide icon={Smartphone} title="Android: dari notifikasi bank (MacroDroid)">
+                <Guide icon={Smartphone} title="Android gratis: Autox.js (disarankan)">
+                    <ol className="list-decimal pl-5 space-y-1">
+                        <li>Pasang <b>Autox.js</b> dari halaman Releases di GitHub proyeknya (gratis, open source, untuk pemakaian pribadi).</li>
+                        <li>Buka Autox, aktifkan <b>Foreground service</b> di pengaturannya supaya skrip tidak dimatikan HP.</li>
+                        <li>{freshToken ? 'Ketuk Salin skrip di bawah' : 'Buat token dulu di atas, lalu ketuk Salin skrip'}. Token dan alamat webhook sudah terisi di dalamnya.</li>
+                        <li>Di Autox: <b>+</b> → <b>File baru</b> → tempel → simpan dengan nama <code className="font-mono">rplanner.js</code> → jalankan (▶).</li>
+                        <li>Saat pertama jalan, Autox membuka pengaturan <b>Akses notifikasi</b>. Izinkan Autox, lalu jalankan skrip sekali lagi.</li>
+                        <li>Di pengaturan baterai HP, set Autox ke <b>Tidak dibatasi</b>.</li>
+                    </ol>
+                    <button
+                        disabled={!freshToken}
+                        onClick={async () => {
+                            await navigator.clipboard.writeText(buildAutoxScript(INGEST_URL, freshToken!));
+                            toast.success('Skrip disalin. Tempel di Autox.js.');
+                        }}
+                        className="mt-3 w-full h-11 rounded-xl bg-rp-surface-2 text-rp-royal text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                        <Copy className="w-4 h-4" /> Salin skrip Autox
+                    </button>
+                    <p className="mt-2">Hanya notifikasi dari aplikasi bank & e-wallet umum yang dikirim. Bank-mu tidak ada di daftar? Ubah <code className="font-mono">CARI_NAMA_PAKET</code> jadi <code className="font-mono">true</code> di skrip, lihat lognya, lalu tambahkan nama paketnya ke <code className="font-mono">APPS</code>.</p>
+                    <p className="mt-2">Token hanya tampil sekali. Kalau sudah tertutup, buat token baru lalu salin ulang skripnya.</p>
+                </Guide>
+
+                <Guide icon={Smartphone} title="Android: MacroDroid (gratis sampai 5 macro)">
                     <ol className="list-decimal pl-5 space-y-1">
                         <li>Pasang <b>MacroDroid</b> dari Play Store, beri izin <i>Akses Notifikasi</i>.</li>
                         <li>Pemicu: <b>Notifikasi Diterima</b> → pilih aplikasi bank/e-wallet kamu (BCA, BRImo, Livin, GoPay, DANA, dll).</li>

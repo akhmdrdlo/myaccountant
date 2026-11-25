@@ -77,7 +77,20 @@ Push/Share Target butuh HTTPS. Deploy `dist/` (hasil `npm run build`) ke Vercel/
 
 1. Buka situs → **Pasang aplikasi** (Android) / **Bagikan → Tambah ke Layar Utama** (iPhone).
 2. Buka Rplanner dari ikon → ikon lonceng → **Aktifkan notifikasi** → **Kirim tes**.
-3. **Buat token**, salin, lalu ikuti panduan MacroDroid / email / Shortcuts di layar yang sama.
+3. **Buat token**, lalu ikuti panduan di layar yang sama: Autox.js (Android, gratis), MacroDroid, email, atau Shortcuts (iPhone).
+
+### Android dengan Autox.js (gratis)
+
+Autox.js adalah aplikasi otomasi JavaScript open source (turunan Auto.js). Lisensinya melarang pemakaian komersial, jadi cocok untuk pemakaian pribadi.
+
+1. Pasang Autox.js dari halaman Releases proyeknya di GitHub, lalu aktifkan **Foreground service** di pengaturan Autox.
+2. Di Rplanner: lonceng → **Buat token** → buka panduan Autox → **Salin skrip Autox**. Token dan URL webhook sudah terisi.
+   Template tanpa token juga ada di [`tools/autox/rplanner.js`](../tools/autox/rplanner.js).
+3. Di Autox: buat file baru, tempel, simpan sebagai `rplanner.js`, lalu jalankan.
+4. Saat pertama jalan, Autox membuka pengaturan **Akses notifikasi**. Izinkan, lalu jalankan skripnya sekali lagi.
+5. Set Autox ke **Tidak dibatasi** di pengaturan baterai HP.
+
+Skrip hanya meneruskan notifikasi dari daftar `APPS` (bank & e-wallet umum). Kalau bank-mu belum ada, ubah `CARI_NAMA_PAKET = true`, lihat nama paket di log Autox, tambahkan ke `APPS`, lalu kembalikan ke `false`.
 
 ## Cara uji webhook tanpa HP
 
