@@ -3,11 +3,23 @@ import { supabase } from '../lib/supabase';
 import type { Transaction, TransactionInput, Goal, Budget, Subscription, Investment } from '../types';
 import { INITIAL_METADATA } from '../services/initialSeed';
 
+export interface SaveResult {
+    ok: boolean;
+    /** true = gagal karena jaringan; aman untuk diantrekan dan dikirim ulang */
+    offline: boolean;
+    message?: string;
+}
+
+const isNetworkError = (msg = '') => /failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|ERR_INTERNET|ERR_NETWORK/i.test(msg);
+
 export const useSupabase = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const getUserId = async () => {
+        // Sesi lokal dulu (tanpa jaringan, diperbarui otomatis oleh supabase-js); getUser() hanya cadangan
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) return session.user.id;
         const { data: { user } } = await supabase.auth.getUser();
         return user?.id;
     };
@@ -159,10 +171,15 @@ export const useSupabase = () => {
      * Simpan transaksi. Jika `externalId` diisi (transaksi otomatis), insert bersifat idempoten:
      * memanggil dua kali dengan source+externalId yang sama tidak membuat duplikat.
      */
-    const addTransaction = useCallback(async (transaction: TransactionInput & { id?: string; source?: string; externalId?: string; timestamp?: string }) => {
+    /**
+     * Simpan transaksi dan laporkan alasannya bila gagal:
+     * `offline` = jaringan putus (boleh diantrekan), selain itu server menolak (jangan diantrekan, tampilkan pesannya).
+     */
+    const saveTransaction = useCallback(async (transaction: TransactionInput & { id?: string; source?: string; externalId?: string; timestamp?: string }): Promise<SaveResult> => {
+        if (!navigator.onLine) return { ok: false, offline: true, message: 'Tidak ada koneksi internet.' };
         try {
             const userId = await getUserId();
-            if (!userId) return false;
+            if (!userId) return { ok: false, offline: false, message: 'Sesi login berakhir. Keluar lalu masuk lagi.' };
 
             const newTx: Record<string, unknown> = {
                 id: transaction.id || undefined, // let database generate UUID if not specified
@@ -192,13 +209,26 @@ export const useSupabase = () => {
                 delete newTx.tags;
                 ({ error } = await write());
             }
-            if (error) throw error;
-            return true;
+            if (error && transaction.externalId && /source|external_id|ON CONFLICT|unique or exclusion/i.test(error.message)) {
+                // Migrasi idempotensi belum dijalankan — tetap simpan sebagai insert biasa daripada kehilangan data
+                delete newTx.source;
+                delete newTx.external_id;
+                ({ error } = await supabase.from('transactions').insert([newTx]));
+            }
+            if (error) {
+                console.error('Supabase menolak transaksi:', error);
+                return { ok: false, offline: isNetworkError(error.message), message: error.message };
+            }
+            return { ok: true, offline: false };
         } catch (err) {
-            console.error("Error adding transaction to Supabase:", err);
-            return false;
+            const message = err instanceof Error ? err.message : String(err);
+            console.error('Error adding transaction to Supabase:', err);
+            return { ok: false, offline: isNetworkError(message), message };
         }
     }, []);
+
+    /** Versi lama (boolean) untuk pemanggil yang tidak butuh alasan gagal. */
+    const addTransaction = useCallback(async (transaction: Parameters<typeof saveTransaction>[0]) => (await saveTransaction(transaction)).ok, [saveTransaction]);
 
     const updateTransaction = useCallback(async (tx: Pick<Transaction, 'id' | 'type' | 'category' | 'amount' | 'description' | 'account' | 'timestamp' | 'tags'>) => {
         const patch: Record<string, unknown> = {
@@ -563,6 +593,7 @@ export const useSupabase = () => {
 
     return {
         fetchTransactions,
+        saveTransaction,
         updateTransaction,
         importTransactions,
         deleteTransactions,

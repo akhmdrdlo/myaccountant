@@ -68,7 +68,7 @@ const INITIAL_SEARCH = window.location.search;
 let initialLinkHandled = false;
 
 function App() {
-  const { fetchTransactions, addTransaction, updateTransaction, deleteTransactions, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useSupabase();
+  const { fetchTransactions, addTransaction, saveTransaction, updateTransaction, deleteTransactions, addGoal, updateGoal, deleteGoal, saveBudgets: saveBudgetsApi } = useSupabase();
   const {
     transactions, setTransactions, setMetadata, goals, setGoals, budgets, setBudgets,
     setSubscriptions, setInvestments, addTransactionOptimistic, removeTransactionOptimistic,
@@ -243,12 +243,19 @@ function App() {
       };
 
       const now = new Date().toISOString();
-      const sentOut = navigator.onLine && (await addTransaction(sourceTx));
-      const sentIn = navigator.onLine && (await addTransaction(destTx));
-      // Sisi yang gagal masuk antrean offline; tidak ada transfer yang hilang setengah
-      if (!sentOut) enqueue({ ...sourceTx, timestamp: now });
-      if (!sentIn) enqueue({ ...destTx, timestamp: now });
-      if (!sentOut || !sentIn) toast.info('Belum tersambung. Transfer disimpan di HP dan dikirim otomatis saat online.');
+      const out = await saveTransaction(sourceTx);
+      if (!out.ok && !out.offline) {
+        toast.error(`Transfer gagal disimpan: ${out.message ?? 'ditolak server'}`);
+        return false;
+      }
+      const inn = out.ok ? await saveTransaction(destTx) : out;
+      // Sisi yang gagal karena jaringan masuk antrean, supaya transfer tidak tercatat setengah
+      if (!out.ok) enqueue({ ...sourceTx, timestamp: now });
+      if (!inn.ok) enqueue({ ...destTx, timestamp: now });
+      if (!out.ok || !inn.ok) {
+        if (inn.offline) toast.info('Belum tersambung. Transfer disimpan di HP dan dikirim otomatis saat online.');
+        else toast.error(`Sisi masuk transfer gagal: ${inn.message ?? 'ditolak server'}. Akan dicoba lagi otomatis.`);
+      }
       await refreshData();
       return true;
     }
@@ -256,16 +263,21 @@ function App() {
     const tempId = crypto.randomUUID();
     addTransactionOptimistic({ ...input, id: tempId, timestamp: input.timestamp ?? new Date().toISOString(), status: 'pending' });
 
-    const ok = navigator.onLine && (await addTransaction(input));
-    if (ok) {
+    const res = await saveTransaction(input);
+    if (res.ok) {
       await refreshData();
       return true;
     }
 
     removeTransactionOptimistic(tempId);
+    if (!res.offline) {
+      // Server menolak: mengantre tidak akan membantu, jadi tampilkan alasannya
+      toast.error(`Gagal menyimpan: ${res.message ?? 'ditolak server'}`);
+      return false;
+    }
     if (input.externalId) {
       // Draft otomatis: biarkan tetap di inbox supaya bisa dicoba lagi
-      toast.error('Gagal menyimpan. Draft tetap ada, coba lagi saat online.');
+      toast.error('Belum tersambung. Draft tetap ada, coba lagi saat online.');
       return false;
     }
     enqueue(input);
