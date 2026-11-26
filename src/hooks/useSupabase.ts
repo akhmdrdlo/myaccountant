@@ -182,7 +182,8 @@ export const useSupabase = () => {
             if (!userId) return { ok: false, offline: false, message: 'Sesi login berakhir. Keluar lalu masuk lagi.' };
 
             const newTx: Record<string, unknown> = {
-                id: transaction.id || undefined, // let database generate UUID if not specified
+                // id dibuat di klien: kunci bernilai undefined dikirim sebagai NULL oleh supabase-js dan ditolak kolom id
+                id: transaction.id || crypto.randomUUID(),
                 user_id: userId,
                 type: transaction.type,
                 category: transaction.category,
@@ -266,6 +267,7 @@ export const useSupabase = () => {
         let sent = 0;
         for (let i = 0; i < rows.length; i += 200) {
             const chunk = rows.slice(i, i + 200).map(r => ({
+                id: crypto.randomUUID(),
                 user_id: userId,
                 type: r.type,
                 category: r.category,

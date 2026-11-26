@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
 
         if (account) {
             const { error } = await db.from('transactions').upsert({
+                id: crypto.randomUUID(),
                 user_id: userId,
                 type: parsed.type,
                 category: parsed.category,
