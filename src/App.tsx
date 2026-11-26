@@ -47,6 +47,7 @@ import { PaydaySheet } from './components/planning/PaydaySheet';
 import { YearReviewView } from './components/analytics/YearReviewView';
 import { NetWorthCard } from './components/analytics/NetWorthCard';
 import { AppLock } from './components/auth/AppLock';
+import { DueBillsCard } from './components/home/DueBillsCard';
 
 type AddTxInput = TransactionInput & { source?: string; externalId?: string; timestamp?: string };
 
@@ -535,6 +536,7 @@ function App() {
             </div>
           )}
 
+          <DueBillsCard onChanged={refreshData} />
           <FinancialSummary onSetPayday={() => setPaydayOpen(true)} />
 
           <section className="mb-6" aria-labelledby="fitur-title">

@@ -2,6 +2,7 @@
 import type { Debt, Installment, Subscription, Transaction, Budget } from '../types';
 import { institutionForAccount, isDebtKind } from './institutions';
 import { inPeriod, isNeutralCategory, type Period } from './period';
+import { isPaidThisMonth } from './subscriptions';
 
 export interface UpcomingItem {
     label: string;
@@ -53,7 +54,7 @@ export function computeSafeToSpend(input: {
 
     const upcoming: UpcomingItem[] = [];
     for (const s of input.subscriptions) {
-        if (paidInPeriod(`Auto Sub: ${s.name}`)) continue;
+        if (isPaidThisMonth(s, input.transactions, now)) continue;
         const date = nextDueInPeriod(s.billingDate, input.period, now);
         if (date) upcoming.push({ label: s.name, amount: s.amount, date, kind: 'subscription' });
     }

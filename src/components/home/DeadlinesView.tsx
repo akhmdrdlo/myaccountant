@@ -7,6 +7,7 @@ import { SubviewHeader } from '../layout/SubviewHeader';
 import { Field, MoneyInput, PrimaryButton, Sheet, fieldClass } from '../common/Sheet';
 import { cn, formatRupiah, formatRupiahShort } from '../../lib/utils';
 import type { Subscription } from '../../types';
+import { isAutoSubEnabled, setAutoSub } from '../../lib/subscriptions';
 
 interface DeadlinesViewProps {
     onBack: () => void;
@@ -69,6 +70,8 @@ export const DeadlinesView = ({ onBack, onOpenView }: DeadlinesViewProps) => {
                     </button>
                 }
             />
+
+            <AutoSubToggle />
 
             <section className="rp-card p-4 mb-5 flex items-center justify-between">
                 <div>
@@ -181,5 +184,26 @@ const SubscriptionSheet = ({ sub, onClose }: { sub?: Subscription; onClose: () =
                 </select>
             </Field>
         </Sheet>
+    );
+};
+
+/** Pencatatan langganan otomatis: mati secara bawaan, berlaku di perangkat ini. */
+const AutoSubToggle = () => {
+    const [on, setOn] = useState(isAutoSubEnabled);
+    return (
+        <button
+            role="switch"
+            aria-checked={on}
+            onClick={() => { setAutoSub(!on); setOn(!on); toast.success(!on ? 'Langganan akan dicatat otomatis saat jatuh tempo.' : 'Langganan yang jatuh tempo akan ditanyakan dulu di beranda.'); }}
+            className="w-full rp-card p-4 mb-4 flex items-center gap-3 text-left"
+        >
+            <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-rp-ink">Catat langganan otomatis</span>
+                <span className="block text-xs text-rp-ink-2">{on ? 'Dicatat dari dompet tunai saat jatuh tempo.' : 'Mati: kamu konfirmasi dulu di beranda.'}</span>
+            </span>
+            <span className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${on ? 'bg-rp-royal' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
+            </span>
+        </button>
     );
 };
