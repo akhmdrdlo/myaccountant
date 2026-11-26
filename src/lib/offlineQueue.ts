@@ -9,12 +9,16 @@ export interface QueuedTx extends TransactionInput {
     source: 'offline';
     externalId: string;
     attempts: number;
+    /** Akun yang membuat item; hanya akun ini yang boleh mengirimnya */
+    owner: string;
 }
 
 const KEY = 'rplanner_offline_queue';
 export const MAX_ATTEMPTS = 6;
 
-export function readQueue(): QueuedTx[] {
+const currentOwner = () => localStorage.getItem('rplanner_username') ?? '';
+
+function readAll(): QueuedTx[] {
     try {
         return JSON.parse(localStorage.getItem(KEY) ?? '[]') as QueuedTx[];
     } catch {
@@ -22,8 +26,17 @@ export function readQueue(): QueuedTx[] {
     }
 }
 
+/** Item milik akun yang sedang login saja (item tanpa pemilik dari versi lama dianggap milik siapa pun tidak jelas → tidak dikirim). */
+export function readQueue(): QueuedTx[] {
+    const me = currentOwner();
+    return me ? readAll().filter(q => q.owner === me) : [];
+}
+
+/** Tulis ulang item milik akun ini, item akun lain dibiarkan apa adanya. */
 function writeQueue(items: QueuedTx[]) {
-    localStorage.setItem(KEY, JSON.stringify(items));
+    const me = currentOwner();
+    const others = readAll().filter(q => q.owner !== me);
+    localStorage.setItem(KEY, JSON.stringify([...others, ...items]));
     window.dispatchEvent(new CustomEvent('rplanner:queue', { detail: items.length }));
 }
 
@@ -36,6 +49,7 @@ export function enqueue(input: TransactionInput & { timestamp?: string }): Queue
         source: 'offline',
         externalId: `offline:${queueId}`,
         attempts: 0,
+        owner: currentOwner(),
     };
     writeQueue([...readQueue(), item]);
     return item;

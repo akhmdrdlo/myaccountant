@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { markActive, shouldLock, unlock } from '../../lib/appLock';
 import { supabase } from '../../lib/supabase';
+import { clearLocalUserData } from '../../lib/session';
 
 /** Membungkus aplikasi: tampilkan layar kunci saat dibuka atau setelah ditinggal > 1 menit. */
 export const AppLock = ({ children }: { children: ReactNode }) => {
@@ -46,6 +47,7 @@ export const AppLock = ({ children }: { children: ReactNode }) => {
             <button
                 onClick={async () => {
                     if (!window.confirm('Keluar dan masuk lagi dengan username & kata sandi?')) return;
+                    await clearLocalUserData();
                     await supabase.auth.signOut();
                     localStorage.removeItem('rplanner_lock_credential');
                     window.location.reload();

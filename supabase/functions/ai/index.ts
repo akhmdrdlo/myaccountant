@@ -55,7 +55,11 @@ Deno.serve(async (req) => {
                     .filter((m): m is ChatTurn => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
                     .map(m => ({ role: m.role, content: m.content.slice(0, 2000) }));
                 if (!history.length || history[history.length - 1].role !== 'user') return json({ error: 'pesan terakhir harus dari user' }, 400);
-                const reply = await aiAdvisor(history, String(body.summary ?? '').slice(0, 6000));
+                // Memori dibaca dengan JWT pengguna (userClient), BUKAN service role: RLS menjamin hanya miliknya.
+                // Klien tidak mengirim memori sendiri, jadi tidak bisa menyelipkan memori orang lain.
+                const { data: notes } = await userClient.from('ai_memory')
+                    .select('kind, content').eq('enabled', true).eq('user_id', user.id).order('created_at').limit(30);
+                const reply = await aiAdvisor(history, String(body.summary ?? '').slice(0, 6000), notes ?? []);
                 return json({ reply });
             }
             default:

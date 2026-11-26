@@ -4,12 +4,25 @@ import { useFinanceStore } from '../../store/useFinanceStore';
 import { SubviewHeader } from '../layout/SubviewHeader';
 import { AiError, aiAdvisor, buildFinanceSummary, type ChatTurn } from '../../lib/ai';
 import { cn } from '../../lib/utils';
+import { looksSensitive, useAiMemory } from '../../hooks/useAiMemory';
 
 interface AiAdvisorViewProps {
     onBack: () => void;
 }
 
-const STORAGE_KEY = 'rplanner_advisor_chat';
+// Riwayat chat per akun (kunci memuat nama pengguna) dan dihapus saat logout — lihat clearAdvisorChat
+const storageKey = () => `rplanner_advisor_chat:${localStorage.getItem('rplanner_username') ?? 'anon'}`;
+
+export function clearAdvisorChat() {
+    Object.keys(sessionStorage).filter(k => k.startsWith('rplanner_advisor_chat')).forEach(k => sessionStorage.removeItem(k));
+}
+
+/** Pisahkan saran memori "[[INGAT: …]]" dari teks jawaban. */
+function splitMemory(reply: string): { text: string; memory?: string } {
+    const m = reply.match(/\[\[INGAT:\s*([^\]]{1,200})\]\]\s*$/);
+    if (!m) return { text: reply };
+    return { text: reply.slice(0, m.index).trim(), memory: m[1].trim() };
+}
 
 const SUGGESTIONS = [
     'Kenapa pengeluaranku bulan ini lebih besar?',
@@ -22,18 +35,20 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
     const { transactions, budgets, goals, getAccountBalances, getAccountBalance } = useFinanceStore();
     const [messages, setMessages] = useState<ChatTurn[]>(() => {
         try {
-            return JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '[]');
+            return JSON.parse(sessionStorage.getItem(storageKey()) ?? '[]');
         } catch {
             return [];
         }
     });
+    const [suggestion, setSuggestion] = useState<string | null>(null);
+    const { add } = useAiMemory();
     const [input, setInput] = useState('');
     const [thinking, setThinking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+        sessionStorage.setItem(storageKey(), JSON.stringify(messages));
         endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [messages, thinking]);
 
@@ -57,7 +72,10 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
                 })),
             });
             const reply = await aiAdvisor(next, summary);
-            setMessages([...next, { role: 'assistant', content: reply ?? 'Maaf, aku belum bisa menjawab. Coba tanya dengan kalimat lain.' }]);
+            const { text: answer, memory } = splitMemory(reply ?? '');
+            setMessages([...next, { role: 'assistant', content: answer || 'Maaf, aku belum bisa menjawab. Coba tanya dengan kalimat lain.' }]);
+            // Saran memori hanya ditawarkan; disimpan kalau pengguna menekan "Simpan"
+            setSuggestion(memory && !looksSensitive(memory) ? memory : null);
         } catch (err) {
             setError(err instanceof AiError ? err.message : 'Terjadi kesalahan. Coba lagi.');
             setMessages(messages); // kembalikan supaya pertanyaan bisa dikirim ulang
@@ -116,6 +134,26 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
                 {thinking && (
                     <div className="flex justify-start">
                         <div className="rp-card rounded-2xl rounded-bl-md px-4 py-3 text-sm text-rp-ink-2">Sedang membaca catatanmu…</div>
+                    </div>
+                )}
+
+                {suggestion && !thinking && (
+                    <div className="rp-card p-3 border-rp-royal/40">
+                        <p className="text-xs font-semibold text-rp-royal">Simpan ke memori?</p>
+                        <p className="mt-0.5 text-sm text-rp-ink">{suggestion}</p>
+                        <div className="mt-2 flex gap-2">
+                            <button onClick={() => setSuggestion(null)} className="h-9 px-3 rounded-lg text-xs font-semibold text-rp-ink-2 hover:bg-rp-surface-2">Tidak</button>
+                            <button
+                                onClick={async () => {
+                                    const err = await add('konteks', suggestion);
+                                    if (err) setError(err);
+                                    setSuggestion(null);
+                                }}
+                                className="h-9 px-3 rounded-lg bg-rp-surface-2 text-rp-royal text-xs font-semibold"
+                            >
+                                Simpan
+                            </button>
+                        </div>
                     </div>
                 )}
 

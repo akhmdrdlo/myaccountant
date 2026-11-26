@@ -48,6 +48,8 @@ import { YearReviewView } from './components/analytics/YearReviewView';
 import { NetWorthCard } from './components/analytics/NetWorthCard';
 import { AppLock } from './components/auth/AppLock';
 import { DueBillsCard } from './components/home/DueBillsCard';
+import { AiMemoryView } from './components/account/AiMemoryView';
+import { clearLocalUserData } from './lib/session';
 
 type AddTxInput = TransactionInput & { source?: string; externalId?: string; timestamp?: string };
 
@@ -102,10 +104,7 @@ function App() {
         localStorage.setItem('rplanner_mode', 'online');
         setIsAuthenticated(true);
       } else {
-        localStorage.removeItem('rplanner_token');
-        localStorage.removeItem('rplanner_username');
-        localStorage.removeItem('rplanner_mode');
-        localStorage.removeItem(SNAPSHOT_KEY);
+        clearLocalUserData();
         setIsAuthenticated(false);
       }
     });
@@ -421,6 +420,8 @@ function App() {
         return <ImportView onBack={back} onDone={async () => { await refreshData(); setTab('mutasi'); }} />;
       case 'rekap':
         return <YearReviewView onBack={back} />;
+      case 'memori':
+        return <AiMemoryView onBack={back} />;
       case 'tips':
         return <TipsView onBack={back} />;
       case 'deadlines':

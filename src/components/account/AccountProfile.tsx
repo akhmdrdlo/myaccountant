@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Bell, CalendarDays, Camera, ChevronRight, Download, FileUp, Fingerprint, Lightbulb, LogOut, Tags, Wallet, X, Plus, Trash2 } from 'lucide-react';
+import { Brain, Bell, CalendarDays, Camera, ChevronRight, Download, FileUp, Fingerprint, Lightbulb, LogOut, Tags, Wallet, X, Plus, Trash2 } from 'lucide-react';
+import { AI_ENABLED } from '../../lib/ai';
+import { clearLocalUserData } from '../../lib/session';
 import { disableLock, enableLock, isBiometricAvailable, isLockEnabled } from '../../lib/appLock';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { localDb } from '../../services/localDb';
@@ -123,7 +125,7 @@ export const AccountProfile = ({ onOpenView, onSetPayday }: AccountProfileProps)
         } catch (err) {
             console.error('Sign out error:', err);
         }
-        ['rplanner_token', 'rplanner_username', 'rplanner_mode', 'rplanner_snapshot'].forEach(k => localStorage.removeItem(k));
+        await clearLocalUserData();
         window.location.reload();
     };
 
@@ -155,6 +157,7 @@ export const AccountProfile = ({ onOpenView, onSetPayday }: AccountProfileProps)
                 <h2 className="rp-section-title mb-2">Pengaturan</h2>
                 <ul className="rp-card divide-y divide-rp-line overflow-hidden">
                     <Row icon={Wallet} label="Dompet" hint="Kantong, bank, dan e-wallet" onClick={() => onOpenView?.('dompet')} />
+                    {AI_ENABLED && <Row icon={Brain} label="Yang AI tahu tentangku" hint="Memori untuk Tanya AI" onClick={() => onOpenView?.('memori')} />}
                     <Row icon={Bell} label="Notifikasi & catat otomatis" hint="Pengingat, push, catat dari notifikasi bank" onClick={() => onOpenView?.('notifikasi')} />
                     <Row icon={Tags} label="Kategori" hint={`${(expenseCategories.length || EXPENSE_CATEGORIES.length) + (incomeCategories.length || INCOME_CATEGORIES.length)} kategori`} onClick={() => setCategoriesOpen(true)} />
                     <Row icon={CalendarDays} label="Tanggal gajian" hint={payday === 1 ? 'Awal bulan (tanggal 1)' : `Tanggal ${payday}`} onClick={() => onSetPayday?.()} />
