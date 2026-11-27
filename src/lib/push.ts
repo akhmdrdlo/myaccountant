@@ -49,20 +49,34 @@ export async function enablePush(): Promise<{ ok: true } | { ok: false; reason: 
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
     }));
 
-    const json = sub.toJSON();
+    const reason = await claimSubscription(sub);
+    return reason ? { ok: false, reason } : { ok: true };
+}
+
+/**
+ * Daftarkan perangkat ini ke akun yang sedang login. Lewat RPC claim_push_endpoint supaya
+ * endpoint yang masih tercatat atas nama akun lain (mis. logout saat offline) dipindahkan,
+ * bukan tetap mengirim pengingat akun lama ke HP ini. Mengembalikan pesan error atau null.
+ */
+async function claimSubscription(sub: PushSubscription): Promise<string | null> {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { ok: false, reason: 'not-signed-in' };
+    if (!user) return 'not-signed-in';
+    const json = sub.toJSON();
+    const row = { p256dh: json.keys?.p256dh ?? '', auth: json.keys?.auth ?? '', user_agent: navigator.userAgent.slice(0, 200) };
+    const { error } = await supabase.rpc('claim_push_endpoint', {
+        p_endpoint: sub.endpoint, p_p256dh: row.p256dh, p_auth: row.auth, p_user_agent: row.user_agent,
+    });
+    if (!error) return null;
+    // Migrasi 20261127000000 belum dijalankan → cara lama
+    const { error: legacy } = await supabase.from('push_subscriptions').upsert({ user_id: user.id, endpoint: sub.endpoint, ...row }, { onConflict: 'endpoint' });
+    return legacy?.message ?? null;
+}
 
-    const { error } = await supabase.from('push_subscriptions').upsert({
-        user_id: user.id,
-        endpoint: sub.endpoint,
-        p256dh: json.keys?.p256dh ?? '',
-        auth: json.keys?.auth ?? '',
-        user_agent: navigator.userAgent.slice(0, 200),
-    }, { onConflict: 'endpoint' });
-
-    if (error) return { ok: false, reason: error.message };
-    return { ok: true };
+/** Saat login: kalau HP ini sudah punya izin + langganan push, pindahkan ke akun yang baru login. */
+export async function reclaimPushOnLogin(): Promise<void> {
+    if (getPushSupport() !== 'supported' || Notification.permission !== 'granted') return;
+    const sub = await getCurrentSubscription();
+    if (sub) await claimSubscription(sub);
 }
 
 export async function disablePush(): Promise<void> {

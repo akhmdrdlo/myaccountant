@@ -4,7 +4,7 @@ import { disablePush } from './push';
 
 /** Data keuangan & preferensi yang terikat ke akun (bukan ke perangkat). */
 const USER_KEYS = [
-    'rplanner_token', 'rplanner_username', 'rplanner_mode',
+    'rplanner_token', 'rplanner_username', 'rplanner_user_id', 'rplanner_mode',
     'rplanner_snapshot',          // salinan data terakhir (mode offline)
     'rplanner_payday',            // tanggal gajian
     'rplanner_sub_skip',          // langganan yang dilewati

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Brain, Plus, Trash2 } from 'lucide-react';
+import { Brain, Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { SubviewHeader } from '../layout/SubviewHeader';
 import { useAiMemory, type MemoryKind, type MemoryNote } from '../../hooks/useAiMemory';
 import { cn } from '../../lib/utils';
@@ -66,7 +66,12 @@ export const AiMemoryView = ({ onBack }: { onBack: () => void }) => {
                 </div>
             ) : (
                 <ul className="rp-card divide-y divide-rp-line overflow-hidden">
-                    {notes.map(n => <MemoryRow key={n.id} note={n} onToggle={() => update(n.id, { enabled: !n.enabled })} onDelete={() => remove(n.id)} />)}
+                    {notes.map(n => (
+                        <MemoryRow key={n.id} note={n}
+                            onToggle={() => update(n.id, { enabled: !n.enabled })}
+                            onSave={async content => { const err = await update(n.id, { content }); if (err) toast.error(err); return !err; }}
+                            onDelete={() => remove(n.id)} />
+                    ))}
                 </ul>
             )}
 
@@ -85,12 +90,35 @@ export const AiMemoryView = ({ onBack }: { onBack: () => void }) => {
     );
 };
 
-const MemoryRow = ({ note, onToggle, onDelete }: { note: MemoryNote; onToggle: () => void; onDelete: () => void }) => (
+interface RowProps { note: MemoryNote; onToggle: () => void; onSave: (content: string) => Promise<boolean>; onDelete: () => void }
+
+const MemoryRow = ({ note, onToggle, onSave, onDelete }: RowProps) => {
+    const [draft, setDraft] = useState<string | null>(null);
+    const label = KINDS.find(k => k.id === note.kind)?.label ?? note.kind;
+
+    if (draft !== null) {
+        const save = async () => { if (await onSave(draft)) setDraft(null); };
+        return (
+            <li className="p-4 space-y-2">
+                <span className="block text-xs font-semibold text-rp-royal">{label}</span>
+                <div className="flex gap-2">
+                    <input autoFocus value={draft} maxLength={280} onChange={e => setDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setDraft(null); }}
+                        aria-label="Ubah catatan"
+                        className="flex-1 min-w-0 h-11 px-3 rounded-xl bg-rp-canvas border border-rp-line text-sm text-rp-ink" />
+                    <button onClick={() => setDraft(null)} aria-label="Batal" className="w-11 h-11 shrink-0 rounded-xl text-rp-ink-2 hover:bg-rp-surface-2 flex items-center justify-center"><X className="w-5 h-5" /></button>
+                    <button onClick={save} aria-label="Simpan perubahan" className="w-11 h-11 shrink-0 rounded-xl bg-rp-action text-white flex items-center justify-center"><Check className="w-5 h-5" /></button>
+                </div>
+            </li>
+        );
+    }
+
+    return (
     <li className="flex items-start gap-3 p-4">
-        <span className="flex-1 min-w-0">
-            <span className="block text-xs font-semibold text-rp-royal">{KINDS.find(k => k.id === note.kind)?.label ?? note.kind}</span>
+        <button onClick={() => setDraft(note.content)} aria-label={`Ubah catatan: ${note.content}`} className="flex-1 min-w-0 text-left group">
+            <span className="flex items-center gap-1 text-xs font-semibold text-rp-royal">{label}<Pencil className="w-3 h-3 opacity-60" /></span>
             <span className={cn('block text-sm', note.enabled ? 'text-rp-ink' : 'text-rp-ink-2 line-through')}>{note.content}</span>
-        </span>
+        </button>
         <button onClick={onToggle} role="switch" aria-checked={note.enabled} aria-label={note.enabled ? 'Matikan sementara' : 'Aktifkan'}
             className={cn('relative mt-1 w-10 h-6 shrink-0 rounded-full transition-colors', note.enabled ? 'bg-rp-royal' : 'bg-gray-300 dark:bg-gray-600')}>
             <span className={cn('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', note.enabled && 'translate-x-4')} />
@@ -99,4 +127,5 @@ const MemoryRow = ({ note, onToggle, onDelete }: { note: MemoryNote; onToggle: (
             <Trash2 className="w-4 h-4" />
         </button>
     </li>
-);
+    );
+};

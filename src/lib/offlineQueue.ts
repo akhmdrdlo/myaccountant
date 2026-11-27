@@ -16,7 +16,7 @@ export interface QueuedTx extends TransactionInput {
 const KEY = 'rplanner_offline_queue';
 export const MAX_ATTEMPTS = 6;
 
-const currentOwner = () => localStorage.getItem('rplanner_username') ?? '';
+const currentOwner = () => localStorage.getItem('rplanner_user_id') ?? '';
 
 function readAll(): QueuedTx[] {
     try {
@@ -97,4 +97,24 @@ export async function flushQueue(send: (q: QueuedTx) => Promise<boolean>): Promi
         }
     }
     return { sent, dropped };
+}
+
+// ── Item dari versi lama (tanpa pemilik) ──
+// Tidak dikirim otomatis karena tidak jelas milik akun siapa; pengguna memilih sendiri.
+
+// Pemilik lama bisa kosong atau berupa nama tampilan (sebelum memakai id akun)
+const UUID = /^[0-9a-f-]{36}$/i;
+const isLegacy = (q: QueuedTx) => !q.owner || !UUID.test(q.owner);
+
+export const legacyQueue = (): QueuedTx[] => readAll().filter(isLegacy);
+
+export function claimLegacy() {
+    const me = currentOwner();
+    if (!me) return;
+    localStorage.setItem(KEY, JSON.stringify(readAll().map(q => (isLegacy(q) ? { ...q, owner: me, attempts: 0 } : q))));
+    window.dispatchEvent(new CustomEvent('rplanner:queue-claimed'));
+}
+
+export function discardLegacy() {
+    localStorage.setItem(KEY, JSON.stringify(readAll().filter(q => !isLegacy(q))));
 }

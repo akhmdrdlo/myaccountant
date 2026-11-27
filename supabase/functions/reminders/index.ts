@@ -121,7 +121,10 @@ Deno.serve(async (req) => {
                 let body = `Keluar ${formatRupiah(thisOut)} minggu ini${lastOut ? `, ${thisOut > lastOut ? 'naik' : 'turun'} dari ${formatRupiah(lastOut)}` : ''}.`;
                 if (aiEnabled() && prefs.ai_fallback !== false) {
                     try {
-                        body = (await aiWeeklyLine(summary)) ?? body;
+                        // Service role: wajib difilter user_id pemilik notifikasi ini
+                        const { data: notes } = await db.from('ai_memory').select('kind, content')
+                            .eq('user_id', userId).eq('enabled', true).in('kind', ['konteks', 'gaya']).limit(30);
+                        body = (await aiWeeklyLine(summary, notes ?? [])) ?? body;
                     } catch (err) {
                         console.error('weekly AI gagal', err);
                     }

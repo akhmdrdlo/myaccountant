@@ -32,13 +32,15 @@ import { usePlanning } from './hooks/usePlanning';
 import { useDrafts, type TransactionDraft } from './hooks/useDrafts';
 import { supabase } from './lib/supabase';
 import { parseBankText, type ParsedBankText } from './lib/parseBankText';
-import { getCurrentSubscription, getPushSupport } from './lib/push';
+import { getCurrentSubscription, getPushSupport, reclaimPushOnLogin } from './lib/push';
 import { useFinanceStore } from './store/useFinanceStore';
 import { useThemeStore } from './store/useThemeStore';
 import { formatRupiah } from './lib/utils';
 import { AI_ENABLED } from './lib/ai';
+import { offerMerchantMemory } from './lib/memorySuggest';
 import { enqueue, flushQueue, queuedAsTransactions, readQueue } from './lib/offlineQueue';
 import type { Transaction, TransactionInput, Goal, Budget } from './types';
+import { LegacyQueueCard } from './components/home/LegacyQueueCard';
 import { TransactionEditSheet, findTransferPair } from './components/home/TransactionEditSheet';
 import { DebtsView } from './components/planning/DebtsView';
 import { InstallmentsView } from './components/planning/InstallmentsView';
@@ -97,12 +99,15 @@ function App() {
 
   // ── Auth ────────────────────────────────────────────────────
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         localStorage.setItem('rplanner_token', session.access_token);
         localStorage.setItem('rplanner_username', session.user?.user_metadata?.display_name || session.user?.email?.split('@')[0] || 'User');
+        localStorage.setItem('rplanner_user_id', session.user.id);
         localStorage.setItem('rplanner_mode', 'online');
         setIsAuthenticated(true);
+        // Di luar callback auth (memanggil supabase di dalamnya bisa macet)
+        if (event === 'SIGNED_IN') setTimeout(() => { reclaimPushOnLogin().catch(() => undefined); }, 0);
       } else {
         clearLocalUserData();
         setIsAuthenticated(false);
@@ -155,7 +160,11 @@ function App() {
     };
     flush();
     window.addEventListener('online', flush);
-    return () => window.removeEventListener('online', flush);
+    window.addEventListener('rplanner:queue-claimed', flush);
+    return () => {
+      window.removeEventListener('online', flush);
+      window.removeEventListener('rplanner:queue-claimed', flush);
+    };
   }, [isAuthenticated, addTransaction, refreshData]);
 
   useEffect(() => {
@@ -339,6 +348,7 @@ function App() {
     const original = transactions.find(t => t.id === updated.id);
     if (!pair && original && original.category !== updated.category && updated.description) {
       learnMerchant(updated.description, updated.category);
+      offerMerchantMemory(updated.description, updated.category);
     }
     await refreshData();
     toast.success('Transaksi diperbarui.');
@@ -537,6 +547,7 @@ function App() {
             </div>
           )}
 
+          <LegacyQueueCard />
           <DueBillsCard onChanged={refreshData} />
           <FinancialSummary onSetPayday={() => setPaydayOpen(true)} />
 

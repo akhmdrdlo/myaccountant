@@ -16,6 +16,19 @@ export function looksSensitive(text: string): boolean {
     return /\b\d{8,}\b/.test(text.replace(/[\s-]/g, '')) || /\b(pin|password|kata sandi|otp|cvv|token)\b/i.test(text);
 }
 
+const SENSITIVE_MSG = 'Jangan simpan nomor rekening, PIN, password, atau OTP di memori.';
+
+/** Tambah satu catatan untuk pengguna yang login (user_id diisi database dari auth.uid()). */
+export async function insertMemory(kind: MemoryKind, content: string): Promise<string | null> {
+    const text = content.trim().slice(0, 280);
+    if (!text) return 'Isi catatannya dulu.';
+    if (looksSensitive(text)) return SENSITIVE_MSG;
+    const { error } = await supabase.from('ai_memory').insert({ kind, content: text });
+    if (!error) return null;
+    if (error.code === '23514') return SENSITIVE_MSG;
+    return error.message;
+}
+
 export const useAiMemory = () => {
     const [notes, setNotes] = useState<MemoryNote[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,19 +49,19 @@ export const useAiMemory = () => {
     useEffect(() => { refresh(); }, [refresh]);
 
     const add = useCallback(async (kind: MemoryKind, content: string): Promise<string | null> => {
-        const text = content.trim().slice(0, 280);
-        if (!text) return 'Isi catatannya dulu.';
-        if (looksSensitive(text)) return 'Jangan simpan nomor rekening, PIN, password, atau OTP di memori.';
-        const { error } = await supabase.from('ai_memory').insert({ kind, content: text });
-        if (error) return error.message;
-        await refresh();
-        return null;
+        const err = await insertMemory(kind, content);
+        if (!err) await refresh();
+        return err;
     }, [refresh]);
 
     const update = useCallback(async (id: string, patch: Partial<Pick<MemoryNote, 'content' | 'enabled' | 'kind'>>) => {
-        if (patch.content !== undefined && looksSensitive(patch.content)) return 'Jangan simpan nomor rekening, PIN, password, atau OTP di memori.';
+        if (patch.content !== undefined) {
+            patch = { ...patch, content: patch.content.trim().slice(0, 280) };
+            if (!patch.content) return 'Isi catatannya dulu.';
+            if (looksSensitive(patch.content)) return SENSITIVE_MSG;
+        }
         const { error } = await supabase.from('ai_memory').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
-        if (error) return error.message;
+        if (error) return error.code === '23514' ? SENSITIVE_MSG : error.message;
         await refresh();
         return null;
     }, [refresh]);
