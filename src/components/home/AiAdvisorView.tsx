@@ -41,6 +41,7 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
         }
     });
     const [suggestion, setSuggestion] = useState<string | null>(null);
+    const [memoryCount, setMemoryCount] = useState<number | null | undefined>(undefined);
     const { add } = useAiMemory();
     const [input, setInput] = useState('');
     const [thinking, setThinking] = useState(false);
@@ -71,7 +72,8 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
                     current: g.linkedAccount ? getAccountBalance(g.linkedAccount) : g.currentAmount,
                 })),
             });
-            const reply = await aiAdvisor(next, summary);
+            const { reply, memoryCount: used } = await aiAdvisor(next, summary);
+            setMemoryCount(used);
             const { text: answer, memory } = splitMemory(reply ?? '');
             setMessages([...next, { role: 'assistant', content: answer || 'Maaf, aku belum bisa menjawab. Coba tanya dengan kalimat lain.' }]);
             // Saran memori hanya ditawarkan; disimpan kalau pengguna menekan "Simpan"
@@ -155,6 +157,12 @@ export const AiAdvisorView = ({ onBack }: AiAdvisorViewProps) => {
                             </button>
                         </div>
                     </div>
+                )}
+
+                {memoryCount !== undefined && !thinking && (
+                    <p className="text-xs text-rp-ink-2 text-center">
+                        {memoryCount === null ? 'Memori AI gagal dibaca, jawaban tanpa memori.' : memoryCount > 0 ? `Memakai ${memoryCount} catatan memori kamu.` : 'Belum ada catatan memori yang aktif.'}
+                    </p>
                 )}
 
                 {error && <p role="alert" className="rounded-xl bg-rp-out-soft text-rp-out text-sm p-3">{error}</p>}

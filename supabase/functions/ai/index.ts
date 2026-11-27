@@ -57,10 +57,12 @@ Deno.serve(async (req) => {
                 if (!history.length || history[history.length - 1].role !== 'user') return json({ error: 'pesan terakhir harus dari user' }, 400);
                 // Memori dibaca dengan JWT pengguna (userClient), BUKAN service role: RLS menjamin hanya miliknya.
                 // Klien tidak mengirim memori sendiri, jadi tidak bisa menyelipkan memori orang lain.
-                const { data: notes } = await userClient.from('ai_memory')
+                const { data: notes, error: memErr } = await userClient.from('ai_memory')
                     .select('kind, content').eq('enabled', true).eq('user_id', user.id).order('created_at').limit(30);
-                const reply = await aiAdvisor(history, String(body.summary ?? '').slice(0, 6000), notes ?? []);
-                return json({ reply });
+                if (memErr) console.error('baca memori gagal', memErr.message);
+                const memory = notes ?? [];
+                const reply = await aiAdvisor(history, String(body.summary ?? '').slice(0, 6000), memory);
+                return json({ reply, memory_count: memErr ? null : memory.length });
             }
             default:
                 return json({ error: 'task tidak dikenal' }, 400);

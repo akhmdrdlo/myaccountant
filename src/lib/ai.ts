@@ -48,8 +48,11 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
 export const aiParse = async (text: string) =>
     (await call<{ parsed: AiParsed | null }>({ task: 'parse', text })).parsed;
 
-export const aiAdvisor = async (messages: ChatTurn[], summary: string) =>
-    (await call<{ reply: string | null }>({ task: 'advisor', messages, summary })).reply;
+/** memoryCount: jumlah catatan memori yang dipakai server (null = gagal dibaca, undefined = server versi lama). */
+export const aiAdvisor = async (messages: ChatTurn[], summary: string) => {
+    const res = await call<{ reply: string | null; memory_count?: number | null }>({ task: 'advisor', messages, summary });
+    return { reply: res.reply, memoryCount: res.memory_count };
+};
 
 /** Kecilkan foto (maks 1600px, JPEG) sebelum dikirim supaya cepat & hemat kuota. */
 async function shrinkImage(file: File): Promise<{ base64: string; mediaType: 'image/jpeg' }> {
